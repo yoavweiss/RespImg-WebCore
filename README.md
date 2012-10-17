@@ -21,5 +21,7 @@ Binaries:
 Test page:
 ---------------------
 Once you got your new binary, you can see `<picture>` in action [here] (http://yoavweiss.github.com/RespImg-WebCore/)
+
 *Note:* Currently only `<picture src>` is displaying. `<picture><source src></picture>` is preloaded, but not displayed.
+
 *Note #2:* `<picture src>` is not supposed to work in the final implementation, since `<img>` can do that just fine
