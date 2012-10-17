@@ -10,7 +10,7 @@ Build instructions:
 ----------------------
 * Build Chromium like you normally would on [Linux](http://code.google.com/p/chromium/wiki/LinuxBuildInstructions) or [OSX] (http://code.google.com/p/chromium/wiki/MacBuildInstructions)
 * If your time is precious, use [Ninja](http://code.google.com/p/chromium/wiki/NinjaBuild)
-* Download the patch from
+* Download the patch from [here](https://raw.github.com/yoavweiss/RespImg-WebCore/master/picture_patch.txt)
 * Apply the patch using `patch -p0 < patch.txt`
 
 

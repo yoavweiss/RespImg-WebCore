@@ -1,0 +1,676 @@
+diff --git .gitignore .gitignore
+index 5565643..bbe7ea5 100644
+--- .gitignore
++++ .gitignore
+@@ -259,3 +259,6 @@ v8.log
+ /x86-generic_out/
+ /xcodebuild
+ .svn
++*.orig
++*.rej
++
+diff --git CMakeLists.txt CMakeLists.txt
+index f0fe4a9..77dd03e 100644
+--- CMakeLists.txt
++++ CMakeLists.txt
+@@ -453,6 +453,7 @@ SET(WebCore_IDL_FILES
+     html/HTMLHtmlElement.idl
+     html/HTMLIFrameElement.idl
+     html/HTMLImageElement.idl
++    html/HTMLPictureElement.idl
+     html/HTMLIntentElement.idl
+     html/HTMLInputElement.idl
+     html/HTMLKeygenElement.idl
+@@ -1385,6 +1386,7 @@ SET(WebCore_SOURCES
+     html/HTMLHtmlElement.cpp
+     html/HTMLIFrameElement.cpp
+     html/HTMLImageElement.cpp
++    html/HTMLPictureElement.cpp
+     html/HTMLImageLoader.cpp
+     html/HTMLIntentElement.cpp
+     html/HTMLInputElement.cpp
+diff --git DerivedSources.cpp DerivedSources.cpp
+index 891d17e..c1ec836 100644
+--- DerivedSources.cpp
++++ DerivedSources.cpp
+@@ -175,6 +175,7 @@
+ #include "JSHTMLHtmlElement.cpp"
+ #include "JSHTMLIFrameElement.cpp"
+ #include "JSHTMLImageElement.cpp"
++#include "JSHTMLPictureElement.cpp"
+ #include "JSHTMLInputElement.cpp"
+ #include "JSHTMLKeygenElement.cpp"
+ #include "JSHTMLLabelElement.cpp"
+diff --git DerivedSources.make DerivedSources.make
+index 4de8ce7..0fc868e 100644
+--- DerivedSources.make
++++ DerivedSources.make
+@@ -311,6 +311,7 @@ BINDING_IDLS = \
+     $(WebCore)/html/HTMLHtmlElement.idl \
+     $(WebCore)/html/HTMLIFrameElement.idl \
+     $(WebCore)/html/HTMLImageElement.idl \
++    $(WebCore)/html/HTMLPictureElement.idl \
+     $(WebCore)/html/HTMLInputElement.idl \
+     $(WebCore)/html/HTMLKeygenElement.idl \
+     $(WebCore)/html/HTMLLIElement.idl \
+diff --git DerivedSources.pri DerivedSources.pri
+index 5dfbf9b..533c379 100644
+--- DerivedSources.pri
++++ DerivedSources.pri
+@@ -360,6 +360,7 @@ IDL_BINDINGS += \
+     $$PWD/html/HTMLHtmlElement.idl \
+     $$PWD/html/HTMLIFrameElement.idl \
+     $$PWD/html/HTMLImageElement.idl \
++    $$PWD/html/HTMLPictureElement.idl \
+     $$PWD/html/HTMLInputElement.idl \
+     $$PWD/html/HTMLKeygenElement.idl \
+     $$PWD/html/HTMLLabelElement.idl \
+diff --git GNUmakefile.list.am GNUmakefile.list.am
+index 40f1391..d587d60 100644
+--- GNUmakefile.list.am
++++ GNUmakefile.list.am
+@@ -1449,6 +1449,7 @@ dom_binding_idls += \
+ 	$(WebCore)/html/HTMLHtmlElement.idl \
+ 	$(WebCore)/html/HTMLIFrameElement.idl \
+ 	$(WebCore)/html/HTMLImageElement.idl \
++	$(WebCore)/html/HTMLPictureElement.idl \
+ 	$(WebCore)/html/HTMLInputElement.idl \
+ 	$(WebCore)/html/HTMLKeygenElement.idl \
+ 	$(WebCore)/html/HTMLLIElement.idl \
+diff --git README.md README.md
+new file mode 100644
+index 0000000..c5ede43
+--- /dev/null
++++ README.md
+@@ -0,0 +1,16 @@
++The Responsive Images WebCore fork!!!
++--------------------
++
++This repository contains experiments in adding the `<picture>` element to
++WebKit's WebCore library.
++
++It is based on Chromium's WebKit from 17/10/12.
++
++Build instructions:
++----------------------
++* Build Chromium like you normally would on [Linux](http://code.google.com/p/chromium/wiki/LinuxBuildInstructions) or [OSX] (http://code.google.com/p/chromium/wiki/MacBuildInstructions)
++* If your time is precious, use [Ninja](http://code.google.com/p/chromium/wiki/NinjaBuild)
++* Download the patch from
++* Apply the patch using `patch -p0 < patch.txt`
++
++
+diff --git Target.pri Target.pri
+index 3a04feb..3498bb8 100644
+--- Target.pri
++++ Target.pri
+@@ -613,6 +613,7 @@ SOURCES += \
+     html/HTMLHtmlElement.cpp \
+     html/HTMLIFrameElement.cpp \
+     html/HTMLImageElement.cpp \
++    html/HTMLPictureElement.cpp \
+     html/HTMLImageLoader.cpp \
+     html/HTMLInputElement.cpp \
+     html/HTMLKeygenElement.cpp \
+diff --git UseV8.cmake UseV8.cmake
+index 5cd42c8..2da3b8e 100755
+--- UseV8.cmake
++++ UseV8.cmake
+@@ -111,6 +111,7 @@ LIST(APPEND WebCore_SOURCES
+     bindings/v8/custom/V8HTMLFrameElementCustom.cpp
+     bindings/v8/custom/V8HTMLFrameSetElementCustom.cpp
+     bindings/v8/custom/V8HTMLImageElementConstructor.cpp
++    bindings/v8/custom/V8HTMLPictureElementConstructor.cpp
+     bindings/v8/custom/V8HTMLInputElementCustom.cpp
+     bindings/v8/custom/V8HTMLLinkElementCustom.cpp
+     bindings/v8/custom/V8HTMLOptionElementConstructor.cpp
+diff --git WebCore.gypi WebCore.gypi
+index 0a477b8..c860bd4 100644
+--- WebCore.gypi
++++ WebCore.gypi
+@@ -1092,6 +1092,7 @@
+             'html/HTMLHtmlElement.idl',
+             'html/HTMLIFrameElement.idl',
+             'html/HTMLImageElement.idl',
++            'html/HTMLPictureElement.idl',
+             'html/HTMLInputElement.idl',
+             'html/HTMLIntentElement.idl',
+             'html/HTMLKeygenElement.idl',
+@@ -2405,6 +2406,8 @@
+             'bindings/v8/custom/V8HTMLFrameSetElementCustom.cpp',
+             'bindings/v8/custom/V8HTMLImageElementConstructor.cpp',
+             'bindings/v8/custom/V8HTMLImageElementConstructor.h',
++            'bindings/v8/custom/V8HTMLPictureElementConstructor.cpp',
++            'bindings/v8/custom/V8HTMLPictureElementConstructor.h',
+             'bindings/v8/custom/V8HTMLInputElementCustom.cpp',
+             'bindings/v8/custom/V8HTMLLinkElementCustom.cpp',
+             'bindings/v8/custom/V8HTMLMediaElementCustom.cpp',
+@@ -4169,6 +4172,8 @@
+             'html/HTMLParamElement.h',
+             'html/HTMLParserErrorCodes.cpp',
+             'html/HTMLParserErrorCodes.h',
++            'html/HTMLPictureElement.cpp',
++            'html/HTMLPictureElement.h',
+             'html/HTMLPlugInElement.cpp',
+             'html/HTMLPlugInImageElement.cpp',
+             'html/HTMLPreElement.cpp',
+diff --git bindings/v8/custom/V8HTMLPictureElementConstructor.cpp bindings/v8/custom/V8HTMLPictureElementConstructor.cpp
+new file mode 100644
+index 0000000..1239988
+--- /dev/null
++++ bindings/v8/custom/V8HTMLPictureElementConstructor.cpp
+@@ -0,0 +1,105 @@
++/*
++ * Copyright (C) 2009, 2010 Google Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are
++ * met:
++ *
++ *     * Redistributions of source code must retain the above copyright
++ * notice, this list of conditions and the following disclaimer.
++ *     * Redistributions in binary form must reproduce the above
++ * copyright notice, this list of conditions and the following disclaimer
++ * in the documentation and/or other materials provided with the
++ * distribution.
++ *     * Neither the name of Google Inc. nor the names of its
++ * contributors may be used to endorse or promote products derived from
++ * this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#include "config.h"
++#include "V8HTMLPictureElementConstructor.h"
++
++#include "BindingState.h"
++#include "Document.h"
++#include "Frame.h"
++#include "HTMLPictureElement.h"
++#include "HTMLNames.h"
++#include "V8Binding.h"
++#include "V8Document.h"
++#include "V8HTMLPictureElement.h"
++#include <wtf/RefPtr.h>
++
++namespace WebCore {
++
++WrapperTypeInfo V8HTMLPictureElementConstructor::info = { V8HTMLPictureElementConstructor::GetTemplate, 0, 0, 0, V8HTMLPictureElement::installPerContextPrototypeProperties, 0, WrapperTypeObjectPrototype };
++
++static v8::Handle<v8::Value> v8HTMLPictureElementConstructorCallback(const v8::Arguments& args)
++{
++    INC_STATS("DOM.HTMLPictureElement.Contructor");
++
++    if (!args.IsConstructCall())
++        return throwTypeError("DOM object constructor cannot be called as a function.", args.GetIsolate());
++
++    if (ConstructorMode::current() == ConstructorMode::WrapExistingObject)
++        return args.Holder();
++
++    Document* document = currentDocument(BindingState::instance());
++
++    // Make sure the document is added to the DOM Node map. Otherwise, the HTMLPictureElement instance
++    // may end up being the only node in the map and get garbage-collected prematurely.
++    // FIXME: The correct way to do this would be to make HTMLPictureElement derive from
++    // ActiveDOMObject and use its interface to keep its wrapper alive. Then we would
++    // remove this code and the special case in isObservableThroughDOM.
++    toV8(document, args.Holder(), args.GetIsolate());
++
++    int width;
++    int height;
++    int* optionalWidth = 0;
++    int* optionalHeight = 0;
++    if (args.Length() > 0) {
++        width = toInt32(args[0]);
++        optionalWidth = &width;
++    }
++    if (args.Length() > 1) {
++        height = toInt32(args[1]);
++        optionalHeight = &height;
++    }
++
++    RefPtr<HTMLPictureElement> image = HTMLPictureElement::createForJSConstructor(document, optionalWidth, optionalHeight);
++    v8::Handle<v8::Object> wrapper = args.Holder();
++    V8DOMWrapper::setDOMWrapper(wrapper, &V8HTMLPictureElementConstructor::info, image.get());
++    V8DOMWrapper::setJSWrapperForDOMNode(image.release(), wrapper);
++    return wrapper;
++}
++
++v8::Persistent<v8::FunctionTemplate> V8HTMLPictureElementConstructor::GetTemplate()
++{
++    static v8::Persistent<v8::FunctionTemplate> cachedTemplate;
++    if (!cachedTemplate.IsEmpty())
++        return cachedTemplate;
++
++    v8::HandleScope scope;
++    v8::Local<v8::FunctionTemplate> result = v8::FunctionTemplate::New(v8HTMLPictureElementConstructorCallback);
++
++    v8::Local<v8::ObjectTemplate> instance = result->InstanceTemplate();
++    instance->SetInternalFieldCount(V8HTMLPictureElement::internalFieldCount);
++    result->SetClassName(v8::String::New("HTMLPictureElement"));
++    result->Inherit(V8HTMLPictureElement::GetTemplate());
++
++    cachedTemplate = v8::Persistent<v8::FunctionTemplate>::New(result);
++    return cachedTemplate;
++}
++
++} // namespace WebCore
+diff --git bindings/v8/custom/V8HTMLPictureElementConstructor.h bindings/v8/custom/V8HTMLPictureElementConstructor.h
+new file mode 100644
+index 0000000..578dfa1
+--- /dev/null
++++ bindings/v8/custom/V8HTMLPictureElementConstructor.h
+@@ -0,0 +1,48 @@
++/*
++ * Copyright (C) 2009 Google Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are
++ * met:
++ *
++ *     * Redistributions of source code must retain the above copyright
++ * notice, this list of conditions and the following disclaimer.
++ *     * Redistributions in binary form must reproduce the above
++ * copyright notice, this list of conditions and the following disclaimer
++ * in the documentation and/or other materials provided with the
++ * distribution.
++ *     * Neither the name of Google Inc. nor the names of its
++ * contributors may be used to endorse or promote products derived from
++ * this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#ifndef V8HTMLPictureElementConstructor_h
++#define V8HTMLPictureElementConstructor_h
++
++#include "WrapperTypeInfo.h"
++
++#include <v8.h>
++
++namespace WebCore {
++
++class V8HTMLPictureElementConstructor {
++public:
++    static v8::Persistent<v8::FunctionTemplate> GetTemplate();
++    static WrapperTypeInfo info;
++};
++
++}
++
++#endif // V8HTMLPictureElementConstructor_h
+diff --git html/HTMLImageElement.cpp html/HTMLImageElement.cpp
+index e934e4d..90da098 100644
+--- html/HTMLImageElement.cpp
++++ html/HTMLImageElement.cpp
+@@ -73,7 +73,7 @@ HTMLImageElement::HTMLImageElement(const QualifiedName& tagName, Document* docum
+     , m_form(form)
+     , m_compositeOperator(CompositeSourceOver)
+ {
+-    ASSERT(hasTagName(imgTag));
++    ASSERT((hasTagName(imgTag)) || (hasTagName(pictureTag)));
+     if (form)
+         form->registerImgElement(this);
+ }
+diff --git html/HTMLPictureElement.cpp html/HTMLPictureElement.cpp
+new file mode 100644
+index 0000000..a0e849e
+--- /dev/null
++++ html/HTMLPictureElement.cpp
+@@ -0,0 +1,81 @@
++/*
++ * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
++ *           (C) 1999 Antti Koivisto (koivisto@kde.org)
++ * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2010 Apple Inc. All rights reserved.
++ * Copyright (C) 2010 Google Inc. All rights reserved.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * along with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#include "config.h"
++#include "HTMLImageElement.h"
++#include "HTMLPictureElement.h"
++
++/*
++#include "Attribute.h"
++#include "CSSPropertyNames.h"
++#include "CSSValueKeywords.h"
++#include "ElementShadow.h"
++#include "EventNames.h"
++#include "FrameView.h"
++#include "HTMLDocument.h"
++#include "HTMLFormElement.h"
++#include "HTMLNames.h"
++#include "HTMLParserIdioms.h"
++#include "ImageInnerElement.h"
++#include "RenderImage.h"
++#include "ScriptEventListener.h"
++#include "ShadowRoot.h"
++*/
++
++
++using namespace std;
++
++namespace WebCore {
++
++using namespace HTMLNames;
++
++HTMLPictureElement::HTMLPictureElement(const QualifiedName& tagName, Document* document)
++    : HTMLImageElement(tagName, document, NULL)
++{
++    ASSERT(hasTagName(pictureTag));
++}
++
++PassRefPtr<HTMLPictureElement> HTMLPictureElement::create(Document* document)
++{
++    return adoptRef(new HTMLPictureElement(imgTag, document));
++}
++
++PassRefPtr<HTMLPictureElement> HTMLPictureElement::create(const QualifiedName& tagName, Document* document)
++{
++    return adoptRef(new HTMLPictureElement(tagName, document));
++}
++
++HTMLPictureElement::~HTMLPictureElement()
++{
++}
++
++PassRefPtr<HTMLPictureElement> HTMLPictureElement::createForJSConstructor(Document* document, const int* optionalWidth, const int* optionalHeight)
++{
++    RefPtr<HTMLPictureElement> picture = adoptRef(new HTMLPictureElement(imgTag, document));
++    if (optionalWidth)
++        picture->setWidth(*optionalWidth);
++    if (optionalHeight)
++        picture->setHeight(*optionalHeight);
++    return picture.release();
++}
++
++}
+diff --git html/HTMLPictureElement.h html/HTMLPictureElement.h
+new file mode 100644
+index 0000000..c235f56
+--- /dev/null
++++ html/HTMLPictureElement.h
+@@ -0,0 +1,44 @@
++/*
++ * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
++ *           (C) 1999 Antti Koivisto (koivisto@kde.org)
++ * Copyright (C) 2004, 2008, 2010 Apple Inc. All rights reserved.
++ * Copyright (C) 2010 Google Inc. All rights reserved.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * along with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ *
++ */
++
++#ifndef HTMLPictureElement_h
++#define HTMLPictureElement_h
++
++#include "HTMLImageElement.h"
++
++namespace WebCore {
++
++class HTMLPictureElement : public HTMLImageElement {
++    HTMLPictureElement(const QualifiedName& tagName, Document* document);
++    ~HTMLPictureElement();
++public:
++    static PassRefPtr<HTMLPictureElement> create(Document* document);
++
++    static PassRefPtr<HTMLPictureElement> create(const QualifiedName& tagName, Document* document);
++    static PassRefPtr<HTMLPictureElement> createForJSConstructor(Document* document, const int* optionalWidth, const int* optionalHeight);
++
++};
++
++} //namespace
++
++#endif
+diff --git html/HTMLPictureElement.idl html/HTMLPictureElement.idl
+new file mode 100644
+index 0000000..3093c6e
+--- /dev/null
++++ html/HTMLPictureElement.idl
+@@ -0,0 +1,28 @@
++/*
++ * Copyright (C) 2006, 2009, 2010 Apple Inc. All rights reserved.
++ * Copyright (C) 2006 Samuel Weinig <sam.weinig@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public License
++ * along with this library; see the file COPYING.LIB.  If not, write to
++ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++module html {
++
++    interface [
++        JSGenerateToNativeObject
++    ] HTMLPictureElement : HTMLImageElement {
++    };
++
++}
+diff --git html/HTMLTagNames.in html/HTMLTagNames.in
+index 3660ab9..0155115 100644
+--- html/HTMLTagNames.in
++++ html/HTMLTagNames.in
+@@ -68,6 +68,7 @@ i interfaceName=HTMLElement
+ iframe interfaceName=HTMLIFrameElement
+ image mapToTagName=img
+ img interfaceName=HTMLImageElement, constructorNeedsFormElement
++picture interfaceName=HTMLPictureElement
+ webkitInnerImage interfaceName=HTMLElement, noConstructor
+ input constructorNeedsFormElement, constructorNeedsCreatedByParser
+ intent conditional=WEB_INTENTS_TAG
+diff --git html/parser/HTMLPreloadScanner.cpp html/parser/HTMLPreloadScanner.cpp
+index a75b52e..bcedddc 100644
+--- html/parser/HTMLPreloadScanner.cpp
++++ html/parser/HTMLPreloadScanner.cpp
+@@ -45,11 +45,12 @@ using namespace HTMLNames;
+ 
+ class PreloadTask {
+ public:
+-    explicit PreloadTask(const HTMLToken& token)
++    explicit PreloadTask(const HTMLToken& token, bool inPicture)
+         : m_tagName(token.name().data(), token.name().size())
+         , m_linkIsStyleSheet(false)
+         , m_linkMediaAttributeIsScreen(true)
+         , m_inputIsImage(false)
++        , m_inPictureSubTree(inPicture)
+     {
+         processAttributes(token.attributes());
+     }
+@@ -57,6 +58,7 @@ public:
+     void processAttributes(const HTMLToken::AttributeList& attributes)
+     {
+         if (m_tagName != imgTag
++            && (m_tagName != sourceTag || !m_inPictureSubTree)
+             && m_tagName != inputTag
+             && m_tagName != linkTag
+             && m_tagName != scriptTag
+@@ -74,6 +76,14 @@ public:
+             if (m_tagName == scriptTag || m_tagName == imgTag) {
+                 if (attributeName == srcAttr)
+                     setUrlToLoad(attributeValue);
++            } else if (m_tagName == sourceTag) {
++                printf("in source tag\n");
++                if (attributeName == srcAttr){
++                    setUrlToLoad(attributeValue);
++                    printf("URL set %s\n", (char*)attributeValue.characters());
++                }
++                else if (attributeName == mediaAttr)
++                    m_pictureMediaAttributeMatches = pictureMediaAttributeMatches(attributeValue);
+             } else if (m_tagName == linkTag) {
+                 if (attributeName == hrefAttr)
+                     setUrlToLoad(attributeValue);
+@@ -99,6 +109,10 @@ public:
+         return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
+     }
+ 
++    static bool pictureMediaAttributeMatches(const String& attributeValue){
++
++        return true;
++    }
+     static bool linkMediaAttributeIsScreen(const String& attributeValue)
+     {
+         if (attributeValue.isEmpty())
+@@ -126,11 +140,13 @@ public:
+         if (m_urlToLoad.isEmpty())
+             return;
+ 
++        printf("In preload!!!!!!!!\n");
++
+         CachedResourceLoader* cachedResourceLoader = document->cachedResourceLoader();
+         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
+         if (m_tagName == scriptTag)
+             cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
+-        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage))
++        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
+             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
+         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
+             cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
+@@ -146,7 +162,9 @@ private:
+     String m_baseElementHref;
+     bool m_linkIsStyleSheet;
+     bool m_linkMediaAttributeIsScreen;
++    bool m_pictureMediaAttributeMatches;
+     bool m_inputIsImage;
++    bool m_inPictureSubTree;
+ };
+ 
+ HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
+@@ -178,6 +196,7 @@ void HTMLPreloadScanner::scan()
+ 
+ void HTMLPreloadScanner::processToken()
+ {
++    printf("Processing token\n");
+     if (m_inStyle) {
+         if (m_token.type() == HTMLTokenTypes::Character)
+             m_cssScanner.scan(m_token, scanningBody());
+@@ -187,10 +206,18 @@ void HTMLPreloadScanner::processToken()
+         }
+     }
+ 
++    if (m_inPicture && (m_token.type() == HTMLTokenTypes::EndTag)){
++        AtomicString tagName(m_token.name().data(), m_token.name().size());
++        if(tagName == pictureTag){
++            m_inPicture = false;
++            printf("Going out of picture\n");
++        }
++    }
++
+     if (m_token.type() != HTMLTokenTypes::StartTag)
+         return;
+ 
+-    PreloadTask task(m_token);
++    PreloadTask task(m_token, m_inPicture);
+     m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
+ 
+     if (task.tagName() == bodyTag)
+@@ -199,6 +226,11 @@ void HTMLPreloadScanner::processToken()
+     if (task.tagName() == styleTag)
+         m_inStyle = true;
+ 
++    if (task.tagName() == pictureTag){
++        m_inPicture = true;
++        printf("Going into picture\n");
++    }
++
+     if (task.tagName() == baseTag)
+         updatePredictedBaseElementURL(KURL(m_document->url(), task.baseElementHref()));
+ 
+diff --git html/parser/HTMLPreloadScanner.h html/parser/HTMLPreloadScanner.h
+index 38f5772..440b114 100644
+--- html/parser/HTMLPreloadScanner.h
++++ html/parser/HTMLPreloadScanner.h
+@@ -58,6 +58,7 @@ private:
+     HTMLToken m_token;
+     bool m_bodySeen;
+     bool m_inStyle;
++    bool m_inPicture;
+     KURL m_predictedBaseElementURL;
+ };
+ 
+diff --git page/DOMWindow.idl page/DOMWindow.idl
+index 0e104b6..df8f410 100644
+--- page/DOMWindow.idl
++++ page/DOMWindow.idl
+@@ -427,6 +427,7 @@
+     attribute HTMLHtmlElementConstructor HTMLHtmlElement;
+     attribute HTMLIFrameElementConstructor HTMLIFrameElement;
+     attribute HTMLImageElementConstructor HTMLImageElement;
++    attribute HTMLPictureElementConstructor HTMLPictureElement;
+     attribute HTMLInputElementConstructor HTMLInputElement;
+     attribute HTMLKeygenElementConstructor HTMLKeygenElement;
+     attribute HTMLLIElementConstructor HTMLLIElement;
+diff --git pictureElementImplementationPlan.md pictureElementImplementationPlan.md
+new file mode 100644
+index 0000000..6865962
+--- /dev/null
++++ pictureElementImplementationPlan.md
+@@ -0,0 +1,13 @@
++steps towards a working picture element
++--------------------
++* HTMLPictureElement: public HTMLImageElement
++* Should also inherit lots of functionality from HTMLMediaElement. Not
++  yet sure how
++* What do we want to do with ImageInnerElement? Should we duplicate a
++  similar one as HTMLPictureElement's shadow DOM, and can we use it as is?
++* Add handling of <picture> tag to the PreloadScanner
++ - need to look for <source> and load them according to media
++* How can I do media queries eval inside the preload scanner?
++  MediaQueryMatcher? All I need to get started is get the window
++dimensions from somewhere... 
++* How can I scan source tags with the preload scanner?
