@@ -111,6 +111,7 @@ LIST(APPEND WebCore_SOURCES
     bindings/v8/custom/V8HTMLFrameElementCustom.cpp
     bindings/v8/custom/V8HTMLFrameSetElementCustom.cpp
     bindings/v8/custom/V8HTMLImageElementConstructor.cpp
+    bindings/v8/custom/V8HTMLPictureElementConstructor.cpp
     bindings/v8/custom/V8HTMLInputElementCustom.cpp
     bindings/v8/custom/V8HTMLLinkElementCustom.cpp
     bindings/v8/custom/V8HTMLOptionElementConstructor.cpp

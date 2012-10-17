@@ -453,6 +453,7 @@ SET(WebCore_IDL_FILES
     html/HTMLHtmlElement.idl
     html/HTMLIFrameElement.idl
     html/HTMLImageElement.idl
+    html/HTMLPictureElement.idl
     html/HTMLIntentElement.idl
     html/HTMLInputElement.idl
     html/HTMLKeygenElement.idl
@@ -1385,6 +1386,7 @@ SET(WebCore_SOURCES
     html/HTMLHtmlElement.cpp
     html/HTMLIFrameElement.cpp
     html/HTMLImageElement.cpp
+    html/HTMLPictureElement.cpp
     html/HTMLImageLoader.cpp
     html/HTMLIntentElement.cpp
     html/HTMLInputElement.cpp

@@ -58,6 +58,7 @@ private:
     HTMLToken m_token;
     bool m_bodySeen;
     bool m_inStyle;
+    bool m_inPicture;
     KURL m_predictedBaseElementURL;
 };
 

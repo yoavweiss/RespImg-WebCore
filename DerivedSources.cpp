@@ -175,6 +175,7 @@
 #include "JSHTMLHtmlElement.cpp"
 #include "JSHTMLIFrameElement.cpp"
 #include "JSHTMLImageElement.cpp"
+#include "JSHTMLPictureElement.cpp"
 #include "JSHTMLInputElement.cpp"
 #include "JSHTMLKeygenElement.cpp"
 #include "JSHTMLLabelElement.cpp"

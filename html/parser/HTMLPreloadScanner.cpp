@@ -45,11 +45,12 @@ using namespace HTMLNames;
 
 class PreloadTask {
 public:
-    explicit PreloadTask(const HTMLToken& token)
+    explicit PreloadTask(const HTMLToken& token, bool inPicture)
         : m_tagName(token.name().data(), token.name().size())
         , m_linkIsStyleSheet(false)
         , m_linkMediaAttributeIsScreen(true)
         , m_inputIsImage(false)
+        , m_inPictureSubTree(inPicture)
     {
         processAttributes(token.attributes());
     }
@@ -57,6 +58,7 @@ public:
     void processAttributes(const HTMLToken::AttributeList& attributes)
     {
         if (m_tagName != imgTag
+            && (m_tagName != sourceTag || !m_inPictureSubTree)
             && m_tagName != inputTag
             && m_tagName != linkTag
             && m_tagName != scriptTag
@@ -74,6 +76,14 @@ public:
             if (m_tagName == scriptTag || m_tagName == imgTag) {
                 if (attributeName == srcAttr)
                     setUrlToLoad(attributeValue);
+            } else if (m_tagName == sourceTag) {
+                printf("in source tag\n");
+                if (attributeName == srcAttr){
+                    setUrlToLoad(attributeValue);
+                    printf("URL set %s\n", (char*)attributeValue.characters());
+                }
+                else if (attributeName == mediaAttr)
+                    m_pictureMediaAttributeMatches = pictureMediaAttributeMatches(attributeValue);
             } else if (m_tagName == linkTag) {
                 if (attributeName == hrefAttr)
                     setUrlToLoad(attributeValue);
@@ -99,6 +109,10 @@ public:
         return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
     }
 
+    static bool pictureMediaAttributeMatches(const String& attributeValue){
+
+        return true;
+    }
     static bool linkMediaAttributeIsScreen(const String& attributeValue)
     {
         if (attributeValue.isEmpty())
@@ -126,11 +140,13 @@ public:
         if (m_urlToLoad.isEmpty())
             return;
 
+        printf("In preload!!!!!!!!\n");
+
         CachedResourceLoader* cachedResourceLoader = document->cachedResourceLoader();
         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
         if (m_tagName == scriptTag)
             cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
-        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage))
+        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
             cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
@@ -146,7 +162,9 @@ private:
     String m_baseElementHref;
     bool m_linkIsStyleSheet;
     bool m_linkMediaAttributeIsScreen;
+    bool m_pictureMediaAttributeMatches;
     bool m_inputIsImage;
+    bool m_inPictureSubTree;
 };
 
 HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
@@ -178,6 +196,7 @@ void HTMLPreloadScanner::scan()
 
 void HTMLPreloadScanner::processToken()
 {
+    printf("Processing token\n");
     if (m_inStyle) {
         if (m_token.type() == HTMLTokenTypes::Character)
             m_cssScanner.scan(m_token, scanningBody());
@@ -187,10 +206,18 @@ void HTMLPreloadScanner::processToken()
         }
     }
 
+    if (m_inPicture && (m_token.type() == HTMLTokenTypes::EndTag)){
+        AtomicString tagName(m_token.name().data(), m_token.name().size());
+        if(tagName == pictureTag){
+            m_inPicture = false;
+            printf("Going out of picture\n");
+        }
+    }
+
     if (m_token.type() != HTMLTokenTypes::StartTag)
         return;
 
-    PreloadTask task(m_token);
+    PreloadTask task(m_token, m_inPicture);
     m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
 
     if (task.tagName() == bodyTag)
@@ -198,6 +225,11 @@ void HTMLPreloadScanner::processToken()
 
     if (task.tagName() == styleTag)
         m_inStyle = true;
+
+    if (task.tagName() == pictureTag){
+        m_inPicture = true;
+        printf("Going into picture\n");
+    }
 
     if (task.tagName() == baseTag)
         updatePredictedBaseElementURL(KURL(m_document->url(), task.baseElementHref()));

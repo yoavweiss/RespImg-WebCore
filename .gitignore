@@ -259,3 +259,6 @@ v8.log
 /x86-generic_out/
 /xcodebuild
 .svn
+*.orig
+*.rej
+

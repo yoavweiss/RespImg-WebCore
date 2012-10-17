@@ -613,6 +613,7 @@ SOURCES += \
     html/HTMLHtmlElement.cpp \
     html/HTMLIFrameElement.cpp \
     html/HTMLImageElement.cpp \
+    html/HTMLPictureElement.cpp \
     html/HTMLImageLoader.cpp \
     html/HTMLInputElement.cpp \
     html/HTMLKeygenElement.cpp \
