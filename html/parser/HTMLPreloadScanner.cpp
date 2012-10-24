@@ -77,10 +77,8 @@ public:
                 if (attributeName == srcAttr)
                     setUrlToLoad(attributeValue);
             } else if (m_tagName == sourceTag) {
-                printf("in source tag\n");
                 if (attributeName == srcAttr){
                     setUrlToLoad(attributeValue);
-                    printf("URL set %s\n", (char*)attributeValue.characters());
                 }
                 else if (attributeName == mediaAttr)
                     m_pictureMediaAttributeMatches = pictureMediaAttributeMatches(attributeValue);
@@ -140,8 +138,6 @@ public:
         if (m_urlToLoad.isEmpty())
             return;
 
-        printf("In preload!!!!!!!!\n");
-
         CachedResourceLoader* cachedResourceLoader = document->cachedResourceLoader();
         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
         if (m_tagName == scriptTag)
@@ -196,7 +192,6 @@ void HTMLPreloadScanner::scan()
 
 void HTMLPreloadScanner::processToken()
 {
-    printf("Processing token\n");
     if (m_inStyle) {
         if (m_token.type() == HTMLTokenTypes::Character)
             m_cssScanner.scan(m_token, scanningBody());
@@ -210,7 +205,6 @@ void HTMLPreloadScanner::processToken()
         AtomicString tagName(m_token.name().data(), m_token.name().size());
         if(tagName == pictureTag){
             m_inPicture = false;
-            printf("Going out of picture\n");
         }
     }
 
@@ -228,7 +222,6 @@ void HTMLPreloadScanner::processToken()
 
     if (task.tagName() == pictureTag){
         m_inPicture = true;
-        printf("Going into picture\n");
     }
 
     if (task.tagName() == baseTag)

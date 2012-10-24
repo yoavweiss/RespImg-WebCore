@@ -1,13 +1,14 @@
 diff --git .gitignore .gitignore
-index 5565643..bbe7ea5 100644
+index 5565643..84c7e47 100644
 --- .gitignore
 +++ .gitignore
-@@ -259,3 +259,6 @@ v8.log
+@@ -259,3 +259,7 @@ v8.log
  /x86-generic_out/
  /xcodebuild
  .svn
 +*.orig
 +*.rej
++*.vim
 +
 diff --git CMakeLists.txt CMakeLists.txt
 index f0fe4a9..77dd03e 100644
@@ -611,7 +612,7 @@ index 3660ab9..0155115 100644
  input constructorNeedsFormElement, constructorNeedsCreatedByParser
  intent conditional=WEB_INTENTS_TAG
 diff --git html/parser/HTMLPreloadScanner.cpp html/parser/HTMLPreloadScanner.cpp
-index a75b52e..bcedddc 100644
+index a75b52e..9e37c41 100644
 --- html/parser/HTMLPreloadScanner.cpp
 +++ html/parser/HTMLPreloadScanner.cpp
 @@ -45,11 +45,12 @@ using namespace HTMLNames;
@@ -636,22 +637,20 @@ index a75b52e..bcedddc 100644
              && m_tagName != inputTag
              && m_tagName != linkTag
              && m_tagName != scriptTag
-@@ -74,6 +76,14 @@ public:
+@@ -74,6 +76,12 @@ public:
              if (m_tagName == scriptTag || m_tagName == imgTag) {
                  if (attributeName == srcAttr)
                      setUrlToLoad(attributeValue);
 +            } else if (m_tagName == sourceTag) {
-+                printf("in source tag\n");
 +                if (attributeName == srcAttr){
 +                    setUrlToLoad(attributeValue);
-+                    printf("URL set %s\n", (char*)attributeValue.characters());
 +                }
 +                else if (attributeName == mediaAttr)
 +                    m_pictureMediaAttributeMatches = pictureMediaAttributeMatches(attributeValue);
              } else if (m_tagName == linkTag) {
                  if (attributeName == hrefAttr)
                      setUrlToLoad(attributeValue);
-@@ -99,6 +109,10 @@ public:
+@@ -99,6 +107,10 @@ public:
          return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
      }
  
@@ -662,13 +661,7 @@ index a75b52e..bcedddc 100644
      static bool linkMediaAttributeIsScreen(const String& attributeValue)
      {
          if (attributeValue.isEmpty())
-@@ -126,11 +140,13 @@ public:
-         if (m_urlToLoad.isEmpty())
-             return;
- 
-+        printf("In preload!!!!!!!!\n");
-+
-         CachedResourceLoader* cachedResourceLoader = document->cachedResourceLoader();
+@@ -130,7 +142,7 @@ public:
          ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
          if (m_tagName == scriptTag)
              cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
@@ -677,7 +670,7 @@ index a75b52e..bcedddc 100644
              cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
          else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
              cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
-@@ -146,7 +162,9 @@ private:
+@@ -146,7 +158,9 @@ private:
      String m_baseElementHref;
      bool m_linkIsStyleSheet;
      bool m_linkMediaAttributeIsScreen;
@@ -687,15 +680,7 @@ index a75b52e..bcedddc 100644
  };
  
  HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
-@@ -178,6 +196,7 @@ void HTMLPreloadScanner::scan()
- 
- void HTMLPreloadScanner::processToken()
- {
-+    printf("Processing token\n");
-     if (m_inStyle) {
-         if (m_token.type() == HTMLTokenTypes::Character)
-             m_cssScanner.scan(m_token, scanningBody());
-@@ -187,10 +206,18 @@ void HTMLPreloadScanner::processToken()
+@@ -187,10 +201,17 @@ void HTMLPreloadScanner::processToken()
          }
      }
  
@@ -703,7 +688,6 @@ index a75b52e..bcedddc 100644
 +        AtomicString tagName(m_token.name().data(), m_token.name().size());
 +        if(tagName == pictureTag){
 +            m_inPicture = false;
-+            printf("Going out of picture\n");
 +        }
 +    }
 +
@@ -715,13 +699,12 @@ index a75b52e..bcedddc 100644
      m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
  
      if (task.tagName() == bodyTag)
-@@ -199,6 +226,11 @@ void HTMLPreloadScanner::processToken()
+@@ -199,6 +220,10 @@ void HTMLPreloadScanner::processToken()
      if (task.tagName() == styleTag)
          m_inStyle = true;
  
 +    if (task.tagName() == pictureTag){
 +        m_inPicture = true;
-+        printf("Going into picture\n");
 +    }
 +
      if (task.tagName() == baseTag)
@@ -772,20 +755,21 @@ index 0000000..6865962
 +* How can I scan source tags with the preload scanner?
 diff --git picture_patch.txt picture_patch.txt
 new file mode 100644
-index 0000000..2b603c0
+index 0000000..962f3bc
 --- /dev/null
 +++ picture_patch.txt
-@@ -0,0 +1,754 @@
+@@ -0,0 +1,752 @@
 +diff --git .gitignore .gitignore
-+index 5565643..bbe7ea5 100644
++index 5565643..84c7e47 100644
 +--- .gitignore
 ++++ .gitignore
-+@@ -259,3 +259,6 @@ v8.log
++@@ -259,3 +259,7 @@ v8.log
 + /x86-generic_out/
 + /xcodebuild
 + .svn
 ++*.orig
 ++*.rej
+++*.vim
 ++
 +diff --git CMakeLists.txt CMakeLists.txt
 +index f0fe4a9..77dd03e 100644
@@ -1389,7 +1373,7 @@ index 0000000..2b603c0
 + input constructorNeedsFormElement, constructorNeedsCreatedByParser
 + intent conditional=WEB_INTENTS_TAG
 +diff --git html/parser/HTMLPreloadScanner.cpp html/parser/HTMLPreloadScanner.cpp
-+index a75b52e..bcedddc 100644
++index a75b52e..9e37c41 100644
 +--- html/parser/HTMLPreloadScanner.cpp
 ++++ html/parser/HTMLPreloadScanner.cpp
 +@@ -45,11 +45,12 @@ using namespace HTMLNames;
@@ -1414,22 +1398,20 @@ index 0000000..2b603c0
 +             && m_tagName != inputTag
 +             && m_tagName != linkTag
 +             && m_tagName != scriptTag
-+@@ -74,6 +76,14 @@ public:
++@@ -74,6 +76,12 @@ public:
 +             if (m_tagName == scriptTag || m_tagName == imgTag) {
 +                 if (attributeName == srcAttr)
 +                     setUrlToLoad(attributeValue);
 ++            } else if (m_tagName == sourceTag) {
-++                printf("in source tag\n");
 ++                if (attributeName == srcAttr){
 ++                    setUrlToLoad(attributeValue);
-++                    printf("URL set %s\n", (char*)attributeValue.characters());
 ++                }
 ++                else if (attributeName == mediaAttr)
 ++                    m_pictureMediaAttributeMatches = pictureMediaAttributeMatches(attributeValue);
 +             } else if (m_tagName == linkTag) {
 +                 if (attributeName == hrefAttr)
 +                     setUrlToLoad(attributeValue);
-+@@ -99,6 +109,10 @@ public:
++@@ -99,6 +107,10 @@ public:
 +         return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
 +     }
 + 
@@ -1440,13 +1422,7 @@ index 0000000..2b603c0
 +     static bool linkMediaAttributeIsScreen(const String& attributeValue)
 +     {
 +         if (attributeValue.isEmpty())
-+@@ -126,11 +140,13 @@ public:
-+         if (m_urlToLoad.isEmpty())
-+             return;
-+ 
-++        printf("In preload!!!!!!!!\n");
-++
-+         CachedResourceLoader* cachedResourceLoader = document->cachedResourceLoader();
++@@ -130,7 +142,7 @@ public:
 +         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
 +         if (m_tagName == scriptTag)
 +             cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
@@ -1455,7 +1431,7 @@ index 0000000..2b603c0
 +             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
 +         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
 +             cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
-+@@ -146,7 +162,9 @@ private:
++@@ -146,7 +158,9 @@ private:
 +     String m_baseElementHref;
 +     bool m_linkIsStyleSheet;
 +     bool m_linkMediaAttributeIsScreen;
@@ -1465,15 +1441,7 @@ index 0000000..2b603c0
 + };
 + 
 + HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
-+@@ -178,6 +196,7 @@ void HTMLPreloadScanner::scan()
-+ 
-+ void HTMLPreloadScanner::processToken()
-+ {
-++    printf("Processing token\n");
-+     if (m_inStyle) {
-+         if (m_token.type() == HTMLTokenTypes::Character)
-+             m_cssScanner.scan(m_token, scanningBody());
-+@@ -187,10 +206,18 @@ void HTMLPreloadScanner::processToken()
++@@ -187,10 +201,17 @@ void HTMLPreloadScanner::processToken()
 +         }
 +     }
 + 
@@ -1481,7 +1449,6 @@ index 0000000..2b603c0
 ++        AtomicString tagName(m_token.name().data(), m_token.name().size());
 ++        if(tagName == pictureTag){
 ++            m_inPicture = false;
-++            printf("Going out of picture\n");
 ++        }
 ++    }
 ++
@@ -1493,13 +1460,12 @@ index 0000000..2b603c0
 +     m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
 + 
 +     if (task.tagName() == bodyTag)
-+@@ -199,6 +226,11 @@ void HTMLPreloadScanner::processToken()
++@@ -199,6 +220,10 @@ void HTMLPreloadScanner::processToken()
 +     if (task.tagName() == styleTag)
 +         m_inStyle = true;
 + 
 ++    if (task.tagName() == pictureTag){
 ++        m_inPicture = true;
-++        printf("Going into picture\n");
 ++    }
 ++
 +     if (task.tagName() == baseTag)
@@ -1529,5 +1495,20 @@ index 0000000..2b603c0
 +     attribute HTMLInputElementConstructor HTMLInputElement;
 +     attribute HTMLKeygenElementConstructor HTMLKeygenElement;
 +     attribute HTMLLIElementConstructor HTMLLIElement;
-+diff
++diff --git pictureElementImplementationPlan.md pictureElementImplementationPlan.md
++new file mode 100644
++index 0000000..6865962
++--- /dev/null
+++++ pictureElementImplementationPlan.md
++@@ -0,0 +1,13 @@
+++steps towards a working picture element
+++--------------------
+++* HTMLPictureElement: public HTMLImageElement
+++* Should also inherit lots of functionality from HTMLMediaElement. Not
+++  yet sure how
+++* What do we want to do with ImageInnerElement? Should we duplicate a
+++  similar one as HTMLPictureElement's shadow DOM, and can we use it as is?
+++* Add handling of <picture> tag to the PreloadScanner
+++ - need to look for <source> and load them according to media
+++* How can 
 \ No newline at end of file
