@@ -6,6 +6,11 @@ WebKit's WebCore library.
 
 It is based on Chromium's WebKit from 17/10/12.
 
+*Note*: This is a work in progress. It does not (yet) represent a full
+implementation of the `<picture>` element [specification](http://responsiveimagescg.github.com/picture-element/). Please file any
+inconsistency with the specification as an issue.
+
+
 Build instructions:
 ----------------------
 * Build Chromium like you normally would on [Linux](http://code.google.com/p/chromium/wiki/LinuxBuildInstructions) or [OSX] (http://code.google.com/p/chromium/wiki/MacBuildInstructions)
@@ -15,13 +20,21 @@ Build instructions:
 
 Binaries:
 --------------------------
-* Ubuntu 64 binary can be found [here]( https://github.com/downloads/yoavweiss/RespImg-WebCore/chrome.7z)
-* OSX binary can be found [here]( https://github.com/downloads/yoavweiss/RespImg-WebCore/Chromium.app.tar.gz)
+* Ubuntu 64bit & OSX binaries can be found [here]( https://github.com/yoavweiss/RespImg-WebCore/downloads)
 
 Test page:
 ---------------------
 Once you got your new binary, you can see `<picture>` in action [here] (http://yoavweiss.github.com/RespImg-WebCore/)
 
-*Note:* Currently only `<picture src>` is displaying. `<picture><source src></picture>` is preloaded, but not displayed.
+What should be working:
+--------------------
+* `<picture><source src></picture>` should work. The *first* source
+  should be fetched by the PreloadScanner and then displayed when the
+element is parsed.
 
-*Note #2:* `<picture src>` is not supposed to work in the final implementation, since `<img>` can do that just fine
+What shouldn't be working (yet):
+--------------------
+* The `media` attribute is not yet supported in either the PreloadScanner or the actual parser.
+* The `srcset` attribute is not yet supported in either the PreloadScanner or the actual parser.
+* `<picture src></picture>` fetches the resource, but doesn't display it.
+
