@@ -261,4 +261,5 @@ v8.log
 .svn
 *.orig
 *.rej
+*.vim
 
