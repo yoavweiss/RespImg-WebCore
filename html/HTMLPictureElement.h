@@ -25,17 +25,24 @@
 #define HTMLPictureElement_h
 
 #include "HTMLImageElement.h"
+#include "HTMLSourceElement.h"
 
 namespace WebCore {
 
 class HTMLPictureElement : public HTMLImageElement {
     HTMLPictureElement(const QualifiedName& tagName, Document* document);
     ~HTMLPictureElement();
+    Element* sourceElement() { return getMatchingSource(); }
+    Element* getMatchingSource();
+
+    virtual bool isPictureElement() const { return true; }
+
 public:
     static PassRefPtr<HTMLPictureElement> create(Document* document);
 
     static PassRefPtr<HTMLPictureElement> create(const QualifiedName& tagName, Document* document);
     static PassRefPtr<HTMLPictureElement> createForJSConstructor(Document* document, const int* optionalWidth, const int* optionalHeight);
+    void sourceWasAdded(HTMLSourceElement*);
 
 };
 

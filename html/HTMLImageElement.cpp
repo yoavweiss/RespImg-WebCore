@@ -237,6 +237,10 @@ Node::InsertionNotificationRequest HTMLImageElement::insertedInto(ContainerNode*
     return HTMLElement::insertedInto(insertionPoint);
 }
 
+void HTMLImageElement::updateResources()
+{
+        m_imageLoader.updateFromElement();
+}
 void HTMLImageElement::removedFrom(ContainerNode* insertionPoint)
 {
     if (m_form)

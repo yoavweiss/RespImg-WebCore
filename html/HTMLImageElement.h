@@ -93,6 +93,7 @@ protected:
     HTMLImageElement(const QualifiedName&, Document*, HTMLFormElement* = 0);
 
     virtual void didMoveToNewDocument(Document* oldDocument) OVERRIDE;
+    void updateResources();
 
 private:
     virtual void createShadowSubtree();

@@ -78,4 +78,25 @@ PassRefPtr<HTMLPictureElement> HTMLPictureElement::createForJSConstructor(Docume
     return picture.release();
 }
 
+Element* HTMLPictureElement::getMatchingSource(){
+    NodeVector potentialSourceNodes;
+    getChildNodes(this, potentialSourceNodes);
+    for(    NodeVector::iterator it = potentialSourceNodes.begin();
+            it != potentialSourceNodes.end();
+            it++){
+        RefPtr<Node> nodePtr = *it;
+        Node* node = nodePtr.get();
+        if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
+            // TODO: Switch from upcasting to scanning child Elements
+            return static_cast<Element*>(node);
+        }   
+    }   
+    return this;
+}
+
+void HTMLPictureElement::sourceWasAdded(HTMLSourceElement* source)
+{
+    updateResources();
+}
+
 }
