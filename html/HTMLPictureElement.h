@@ -36,6 +36,9 @@ class HTMLPictureElement : public HTMLImageElement {
     Element* getMatchingSource();
 
     virtual bool isPictureElement() const { return true; }
+    virtual void parseAttribute(const Attribute&);
+
+    bool m_hasSrc;
 
 public:
     static PassRefPtr<HTMLPictureElement> create(Document* document);

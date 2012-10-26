@@ -95,6 +95,7 @@ protected:
     virtual void didMoveToNewDocument(Document* oldDocument) OVERRIDE;
     void updateResources();
 
+    virtual void parseAttribute(const Attribute&) OVERRIDE;
 private:
     virtual void createShadowSubtree();
 
@@ -106,7 +107,6 @@ private:
     void refSourceElement() { ref(); }
     void derefSourceElement() { deref(); }
 
-    virtual void parseAttribute(const Attribute&) OVERRIDE;
     virtual bool isPresentationAttribute(const QualifiedName&) const OVERRIDE;
     virtual void collectStyleForAttribute(const Attribute&, StylePropertySet*) OVERRIDE;
 

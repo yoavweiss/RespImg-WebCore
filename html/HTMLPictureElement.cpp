@@ -24,24 +24,6 @@
 #include "HTMLImageElement.h"
 #include "HTMLPictureElement.h"
 
-/*
-#include "Attribute.h"
-#include "CSSPropertyNames.h"
-#include "CSSValueKeywords.h"
-#include "ElementShadow.h"
-#include "EventNames.h"
-#include "FrameView.h"
-#include "HTMLDocument.h"
-#include "HTMLFormElement.h"
-#include "HTMLNames.h"
-#include "HTMLParserIdioms.h"
-#include "ImageInnerElement.h"
-#include "RenderImage.h"
-#include "ScriptEventListener.h"
-#include "ShadowRoot.h"
-*/
-
-
 using namespace std;
 
 namespace WebCore {
@@ -49,7 +31,8 @@ namespace WebCore {
 using namespace HTMLNames;
 
 HTMLPictureElement::HTMLPictureElement(const QualifiedName& tagName, Document* document)
-    : HTMLImageElement(tagName, document, NULL)
+    : HTMLImageElement(tagName, document, NULL),
+      m_hasSrc(false)
 {
     ASSERT(hasTagName(pictureTag));
 }
@@ -79,24 +62,34 @@ PassRefPtr<HTMLPictureElement> HTMLPictureElement::createForJSConstructor(Docume
 }
 
 Element* HTMLPictureElement::getMatchingSource(){
-    NodeVector potentialSourceNodes;
-    getChildNodes(this, potentialSourceNodes);
-    for(    NodeVector::iterator it = potentialSourceNodes.begin();
-            it != potentialSourceNodes.end();
-            it++){
-        RefPtr<Node> nodePtr = *it;
-        Node* node = nodePtr.get();
-        if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
-            // TODO: Switch from upcasting to scanning child Elements
-            return static_cast<Element*>(node);
+    if(!m_hasSrc){
+        NodeVector potentialSourceNodes;
+        getChildNodes(this, potentialSourceNodes);
+        for(    NodeVector::iterator it = potentialSourceNodes.begin();
+                it != potentialSourceNodes.end();
+                it++){
+            RefPtr<Node> nodePtr = *it;
+            Node* node = nodePtr.get();
+            if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
+                // TODO: Switch from upcasting to scanning child Elements
+                return static_cast<Element*>(node);
+            }   
         }   
-    }   
+    }
     return this;
 }
 
 void HTMLPictureElement::sourceWasAdded(HTMLSourceElement* source)
 {
     updateResources();
+}
+
+void HTMLPictureElement::parseAttribute(const Attribute& attribute)
+{
+    if(attribute.name() == srcAttr)
+        m_hasSrc = true;
+
+    HTMLImageElement::parseAttribute(attribute);
 }
 
 }

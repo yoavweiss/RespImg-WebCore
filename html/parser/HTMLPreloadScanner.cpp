@@ -51,14 +51,18 @@ public:
         , m_linkMediaAttributeIsScreen(true)
         , m_inputIsImage(false)
         , m_inPictureSubTree(inPicture)
+	, m_pictureHasSrc(false)
     {
         processAttributes(token.attributes());
     }
+
+    bool pictureHasSrc(){return m_pictureHasSrc;}
 
     void processAttributes(const HTMLToken::AttributeList& attributes)
     {
         if (m_tagName != imgTag
             && (m_tagName != sourceTag || !m_inPictureSubTree)
+            && m_tagName != pictureTag 
             && m_tagName != inputTag
             && m_tagName != linkTag
             && m_tagName != scriptTag
@@ -76,6 +80,11 @@ public:
             if (m_tagName == scriptTag || m_tagName == imgTag) {
                 if (attributeName == srcAttr)
                     setUrlToLoad(attributeValue);
+            } else if (m_tagName == pictureTag) {
+                if (attributeName == srcAttr) {
+		    setUrlToLoad(attributeValue);
+		    m_pictureHasSrc= false;
+		}
             } else if (m_tagName == sourceTag) {
                 if (attributeName == srcAttr){
                     setUrlToLoad(attributeValue);
@@ -142,7 +151,7 @@ public:
         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
         if (m_tagName == scriptTag)
             cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
-        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
+        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || m_tagName == pictureTag || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
             cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
@@ -161,6 +170,7 @@ private:
     bool m_pictureMediaAttributeMatches;
     bool m_inputIsImage;
     bool m_inPictureSubTree;
+    bool m_pictureHasSrc;
 };
 
 HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
@@ -228,6 +238,8 @@ void HTMLPreloadScanner::processToken()
         updatePredictedBaseElementURL(KURL(m_document->url(), task.baseElementHref()));
 
     task.preload(m_document, scanningBody(), m_predictedBaseElementURL.isEmpty() ? m_document->baseURL() : m_predictedBaseElementURL);
+
+    m_inPicture = !task.pictureHasSrc();
 }
 
 bool HTMLPreloadScanner::scanningBody() const
