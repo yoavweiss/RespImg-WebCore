@@ -80,10 +80,10 @@ index 40f1391..d587d60 100644
  	$(WebCore)/html/HTMLLIElement.idl \
 diff --git README.md README.md
 new file mode 100644
-index 0000000..e9a4efb
+index 0000000..c648e35
 --- /dev/null
 +++ README.md
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,40 @@
 +The Responsive Images WebCore fork!!!
 +--------------------
 +
@@ -91,6 +91,11 @@ index 0000000..e9a4efb
 +WebKit's WebCore library.
 +
 +It is based on Chromium's WebKit from 17/10/12.
++
++*Note*: This is a work in progress. It does not (yet) represent a full
++implementation of the `<picture>` element [specification](http://responsiveimagescg.github.com/picture-element/). Please file any
++inconsistency with the specification as an issue.
++
 +
 +Build instructions:
 +----------------------
@@ -101,16 +106,24 @@ index 0000000..e9a4efb
 +
 +Binaries:
 +--------------------------
-+* Ubuntu 64 binary can be found [here]( https://github.com/downloads/yoavweiss/RespImg-WebCore/chrome.7z)
-+* OSX binary can be found [here]( https://github.com/downloads/yoavweiss/RespImg-WebCore/Chromium.app.tar.gz)
++* Ubuntu 64bit & OSX binaries can be found [here]( https://github.com/yoavweiss/RespImg-WebCore/downloads)
 +
 +Test page:
 +---------------------
 +Once you got your new binary, you can see `<picture>` in action [here] (http://yoavweiss.github.com/RespImg-WebCore/)
 +
-+*Note:* Currently only `<picture src>` is displaying. `<picture><source src></picture>` is preloaded, but not displayed.
++What should be working:
++--------------------
++* `<picture><source src></picture>` should work. The *first* source
++  should be fetched by the PreloadScanner and then displayed when the
++element is parsed.
 +
-+*Note #2:* `<picture src>` is not supposed to work in the final implementation, since `<img>` can do that just fine
++What shouldn't be working (yet):
++--------------------
++* The `media` attribute is not yet supported in either the PreloadScanner or the actual parser.
++* The `srcset` attribute is not yet supported in either the PreloadScanner or the actual parser.
++* `<picture src></picture>` fetches the resource, but doesn't display it.
++
 diff --git Target.pri Target.pri
 index 3a04feb..3498bb8 100644
 --- Target.pri
@@ -368,23 +381,33 @@ index e934e4d..a6bb282 100644
  {
      if (m_form)
 diff --git html/HTMLImageElement.h html/HTMLImageElement.h
-index 9468a79..ed291f3 100644
+index 9468a79..bd65f6b 100644
 --- html/HTMLImageElement.h
 +++ html/HTMLImageElement.h
-@@ -93,6 +93,7 @@ protected:
+@@ -93,7 +93,9 @@ protected:
      HTMLImageElement(const QualifiedName&, Document*, HTMLFormElement* = 0);
  
      virtual void didMoveToNewDocument(Document* oldDocument) OVERRIDE;
 +    void updateResources();
  
++    virtual void parseAttribute(const Attribute&) OVERRIDE;
  private:
      virtual void createShadowSubtree();
+ 
+@@ -105,7 +107,6 @@ private:
+     void refSourceElement() { ref(); }
+     void derefSourceElement() { deref(); }
+ 
+-    virtual void parseAttribute(const Attribute&) OVERRIDE;
+     virtual bool isPresentationAttribute(const QualifiedName&) const OVERRIDE;
+     virtual void collectStyleForAttribute(const Attribute&, StylePropertySet*) OVERRIDE;
+ 
 diff --git html/HTMLPictureElement.cpp html/HTMLPictureElement.cpp
 new file mode 100644
-index 0000000..59c68fa
+index 0000000..70fac59
 --- /dev/null
 +++ html/HTMLPictureElement.cpp
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,95 @@
 +/*
 + * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
 + *           (C) 1999 Antti Koivisto (koivisto@kde.org)
@@ -411,24 +434,6 @@ index 0000000..59c68fa
 +#include "HTMLImageElement.h"
 +#include "HTMLPictureElement.h"
 +
-+/*
-+#include "Attribute.h"
-+#include "CSSPropertyNames.h"
-+#include "CSSValueKeywords.h"
-+#include "ElementShadow.h"
-+#include "EventNames.h"
-+#include "FrameView.h"
-+#include "HTMLDocument.h"
-+#include "HTMLFormElement.h"
-+#include "HTMLNames.h"
-+#include "HTMLParserIdioms.h"
-+#include "ImageInnerElement.h"
-+#include "RenderImage.h"
-+#include "ScriptEventListener.h"
-+#include "ShadowRoot.h"
-+*/
-+
-+
 +using namespace std;
 +
 +namespace WebCore {
@@ -436,7 +441,8 @@ index 0000000..59c68fa
 +using namespace HTMLNames;
 +
 +HTMLPictureElement::HTMLPictureElement(const QualifiedName& tagName, Document* document)
-+    : HTMLImageElement(tagName, document, NULL)
++    : HTMLImageElement(tagName, document, NULL),
++      m_hasSrc(false)
 +{
 +    ASSERT(hasTagName(pictureTag));
 +}
@@ -466,18 +472,20 @@ index 0000000..59c68fa
 +}
 +
 +Element* HTMLPictureElement::getMatchingSource(){
-+    NodeVector potentialSourceNodes;
-+    getChildNodes(this, potentialSourceNodes);
-+    for(    NodeVector::iterator it = potentialSourceNodes.begin();
-+            it != potentialSourceNodes.end();
-+            it++){
-+        RefPtr<Node> nodePtr = *it;
-+        Node* node = nodePtr.get();
-+        if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
-+            // TODO: Switch from upcasting to scanning child Elements
-+            return static_cast<Element*>(node);
++    if(!m_hasSrc){
++        NodeVector potentialSourceNodes;
++        getChildNodes(this, potentialSourceNodes);
++        for(    NodeVector::iterator it = potentialSourceNodes.begin();
++                it != potentialSourceNodes.end();
++                it++){
++            RefPtr<Node> nodePtr = *it;
++            Node* node = nodePtr.get();
++            if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
++                // TODO: Switch from upcasting to scanning child Elements
++                return static_cast<Element*>(node);
++            }   
 +        }   
-+    }   
++    }
 +    return this;
 +}
 +
@@ -486,13 +494,21 @@ index 0000000..59c68fa
 +    updateResources();
 +}
 +
++void HTMLPictureElement::parseAttribute(const Attribute& attribute)
++{
++    if(attribute.name() == srcAttr)
++        m_hasSrc = true;
++
++    HTMLImageElement::parseAttribute(attribute);
++}
++
 +}
 diff --git html/HTMLPictureElement.h html/HTMLPictureElement.h
 new file mode 100644
-index 0000000..cfab253
+index 0000000..369bad3
 --- /dev/null
 +++ html/HTMLPictureElement.h
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,54 @@
 +/*
 + * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
 + *           (C) 1999 Antti Koivisto (koivisto@kde.org)
@@ -531,6 +547,9 @@ index 0000000..cfab253
 +    Element* getMatchingSource();
 +
 +    virtual bool isPictureElement() const { return true; }
++    virtual void parseAttribute(const Attribute&);
++
++    bool m_hasSrc;
 +
 +public:
 +    static PassRefPtr<HTMLPictureElement> create(Document* document);
@@ -612,10 +631,10 @@ index 3660ab9..0155115 100644
  input constructorNeedsFormElement, constructorNeedsCreatedByParser
  intent conditional=WEB_INTENTS_TAG
 diff --git html/parser/HTMLPreloadScanner.cpp html/parser/HTMLPreloadScanner.cpp
-index a75b52e..9e37c41 100644
+index a75b52e..e4c7d41 100644
 --- html/parser/HTMLPreloadScanner.cpp
 +++ html/parser/HTMLPreloadScanner.cpp
-@@ -45,11 +45,12 @@ using namespace HTMLNames;
+@@ -45,18 +45,24 @@ using namespace HTMLNames;
  
  class PreloadTask {
  public:
@@ -626,21 +645,30 @@ index a75b52e..9e37c41 100644
          , m_linkMediaAttributeIsScreen(true)
          , m_inputIsImage(false)
 +        , m_inPictureSubTree(inPicture)
++	, m_pictureHasSrc(false)
      {
          processAttributes(token.attributes());
      }
-@@ -57,6 +58,7 @@ public:
+ 
++    bool pictureHasSrc(){return m_pictureHasSrc;}
++
      void processAttributes(const HTMLToken::AttributeList& attributes)
      {
          if (m_tagName != imgTag
 +            && (m_tagName != sourceTag || !m_inPictureSubTree)
++            && m_tagName != pictureTag 
              && m_tagName != inputTag
              && m_tagName != linkTag
              && m_tagName != scriptTag
-@@ -74,6 +76,12 @@ public:
+@@ -74,6 +80,17 @@ public:
              if (m_tagName == scriptTag || m_tagName == imgTag) {
                  if (attributeName == srcAttr)
                      setUrlToLoad(attributeValue);
++            } else if (m_tagName == pictureTag) {
++                if (attributeName == srcAttr) {
++		    setUrlToLoad(attributeValue);
++		    m_pictureHasSrc= false;
++		}
 +            } else if (m_tagName == sourceTag) {
 +                if (attributeName == srcAttr){
 +                    setUrlToLoad(attributeValue);
@@ -650,7 +678,7 @@ index a75b52e..9e37c41 100644
              } else if (m_tagName == linkTag) {
                  if (attributeName == hrefAttr)
                      setUrlToLoad(attributeValue);
-@@ -99,6 +107,10 @@ public:
+@@ -99,6 +116,10 @@ public:
          return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
      }
  
@@ -661,26 +689,27 @@ index a75b52e..9e37c41 100644
      static bool linkMediaAttributeIsScreen(const String& attributeValue)
      {
          if (attributeValue.isEmpty())
-@@ -130,7 +142,7 @@ public:
+@@ -130,7 +151,7 @@ public:
          ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
          if (m_tagName == scriptTag)
              cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
 -        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage))
-+        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
++        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || m_tagName == pictureTag || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
              cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
          else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
              cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
-@@ -146,7 +158,9 @@ private:
+@@ -146,7 +167,10 @@ private:
      String m_baseElementHref;
      bool m_linkIsStyleSheet;
      bool m_linkMediaAttributeIsScreen;
 +    bool m_pictureMediaAttributeMatches;
      bool m_inputIsImage;
 +    bool m_inPictureSubTree;
++    bool m_pictureHasSrc;
  };
  
  HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
-@@ -187,10 +201,17 @@ void HTMLPreloadScanner::processToken()
+@@ -187,10 +211,17 @@ void HTMLPreloadScanner::processToken()
          }
      }
  
@@ -699,7 +728,7 @@ index a75b52e..9e37c41 100644
      m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
  
      if (task.tagName() == bodyTag)
-@@ -199,6 +220,10 @@ void HTMLPreloadScanner::processToken()
+@@ -199,10 +230,16 @@ void HTMLPreloadScanner::processToken()
      if (task.tagName() == styleTag)
          m_inStyle = true;
  
@@ -710,6 +739,12 @@ index a75b52e..9e37c41 100644
      if (task.tagName() == baseTag)
          updatePredictedBaseElementURL(KURL(m_document->url(), task.baseElementHref()));
  
+     task.preload(m_document, scanningBody(), m_predictedBaseElementURL.isEmpty() ? m_document->baseURL() : m_predictedBaseElementURL);
++
++    m_inPicture = !task.pictureHasSrc();
+ }
+ 
+ bool HTMLPreloadScanner::scanningBody() const
 diff --git html/parser/HTMLPreloadScanner.h html/parser/HTMLPreloadScanner.h
 index 38f5772..440b114 100644
 --- html/parser/HTMLPreloadScanner.h
@@ -755,10 +790,10 @@ index 0000000..6865962
 +* How can I scan source tags with the preload scanner?
 diff --git picture_patch.txt picture_patch.txt
 new file mode 100644
-index 0000000..962f3bc
+index 0000000..e2e0eb8
 --- /dev/null
 +++ picture_patch.txt
-@@ -0,0 +1,752 @@
+@@ -0,0 +1,753 @@
 +diff --git .gitignore .gitignore
 +index 5565643..84c7e47 100644
 +--- .gitignore
@@ -841,10 +876,10 @@ index 0000000..962f3bc
 + 	$(WebCore)/html/HTMLLIElement.idl \
 +diff --git README.md README.md
 +new file mode 100644
-+index 0000000..e9a4efb
++index 0000000..c648e35
 +--- /dev/null
 ++++ README.md
-+@@ -0,0 +1,27 @@
++@@ -0,0 +1,40 @@
 ++The Responsive Images WebCore fork!!!
 ++--------------------
 ++
@@ -852,6 +887,11 @@ index 0000000..962f3bc
 ++WebKit's WebCore library.
 ++
 ++It is based on Chromium's WebKit from 17/10/12.
+++
+++*Note*: This is a work in progress. It does not (yet) represent a full
+++implementation of the `<picture>` element [specification](http://responsiveimagescg.github.com/picture-element/). Please file any
+++inconsistency with the specification as an issue.
+++
 ++
 ++Build instructions:
 ++----------------------
@@ -862,16 +902,24 @@ index 0000000..962f3bc
 ++
 ++Binaries:
 ++--------------------------
-++* Ubuntu 64 binary can be found [here]( https://github.com/downloads/yoavweiss/RespImg-WebCore/chrome.7z)
-++* OSX binary can be found [here]( https://github.com/downloads/yoavweiss/RespImg-WebCore/Chromium.app.tar.gz)
+++* Ubuntu 64bit & OSX binaries can be found [here]( https://github.com/yoavweiss/RespImg-WebCore/downloads)
 ++
 ++Test page:
 ++---------------------
 ++Once you got your new binary, you can see `<picture>` in action [here] (http://yoavweiss.github.com/RespImg-WebCore/)
 ++
-++*Note:* Currently only `<picture src>` is displaying. `<picture><source src></picture>` is preloaded, but not displayed.
+++What should be working:
+++--------------------
+++* `<picture><source src></picture>` should work. The *first* source
+++  should be fetched by the PreloadScanner and then displayed when the
+++element is parsed.
 ++
-++*Note #2:* `<picture src>` is not supposed to work in the final implementation, since `<img>` can do that just fine
+++What shouldn't be working (yet):
+++--------------------
+++* The `media` attribute is not yet supported in either the PreloadScanner or the actual parser.
+++* The `srcset` attribute is not yet supported in either the PreloadScanner or the actual parser.
+++* `<picture src></picture>` fetches the resource, but doesn't display it.
+++
 +diff --git Target.pri Target.pri
 +index 3a04feb..3498bb8 100644
 +--- Target.pri
@@ -1129,23 +1177,33 @@ index 0000000..962f3bc
 + {
 +     if (m_form)
 +diff --git html/HTMLImageElement.h html/HTMLImageElement.h
-+index 9468a79..ed291f3 100644
++index 9468a79..bd65f6b 100644
 +--- html/HTMLImageElement.h
 ++++ html/HTMLImageElement.h
-+@@ -93,6 +93,7 @@ protected:
++@@ -93,7 +93,9 @@ protected:
 +     HTMLImageElement(const QualifiedName&, Document*, HTMLFormElement* = 0);
 + 
 +     virtual void didMoveToNewDocument(Document* oldDocument) OVERRIDE;
 ++    void updateResources();
 + 
+++    virtual void parseAttribute(const Attribute&) OVERRIDE;
 + private:
 +     virtual void createShadowSubtree();
++ 
++@@ -105,7 +107,6 @@ private:
++     void refSourceElement() { ref(); }
++     void derefSourceElement() { deref(); }
++ 
++-    virtual void parseAttribute(const Attribute&) OVERRIDE;
++     virtual bool isPresentationAttribute(const QualifiedName&) const OVERRIDE;
++     virtual void collectStyleForAttribute(const Attribute&, StylePropertySet*) OVERRIDE;
++ 
 +diff --git html/HTMLPictureElement.cpp html/HTMLPictureElement.cpp
 +new file mode 100644
-+index 0000000..59c68fa
++index 0000000..70fac59
 +--- /dev/null
 ++++ html/HTMLPictureElement.cpp
-+@@ -0,0 +1,102 @@
++@@ -0,0 +1,95 @@
 ++/*
 ++ * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
 ++ *           (C) 1999 Antti Koivisto (koivisto@kde.org)
@@ -1172,24 +1230,6 @@ index 0000000..962f3bc
 ++#include "HTMLImageElement.h"
 ++#include "HTMLPictureElement.h"
 ++
-++/*
-++#include "Attribute.h"
-++#include "CSSPropertyNames.h"
-++#include "CSSValueKeywords.h"
-++#include "ElementShadow.h"
-++#include "EventNames.h"
-++#include "FrameView.h"
-++#include "HTMLDocument.h"
-++#include "HTMLFormElement.h"
-++#include "HTMLNames.h"
-++#include "HTMLParserIdioms.h"
-++#include "ImageInnerElement.h"
-++#include "RenderImage.h"
-++#include "ScriptEventListener.h"
-++#include "ShadowRoot.h"
-++*/
-++
-++
 ++using namespace std;
 ++
 ++namespace WebCore {
@@ -1197,7 +1237,8 @@ index 0000000..962f3bc
 ++using namespace HTMLNames;
 ++
 ++HTMLPictureElement::HTMLPictureElement(const QualifiedName& tagName, Document* document)
-++    : HTMLImageElement(tagName, document, NULL)
+++    : HTMLImageElement(tagName, document, NULL),
+++      m_hasSrc(false)
 ++{
 ++    ASSERT(hasTagName(pictureTag));
 ++}
@@ -1227,18 +1268,20 @@ index 0000000..962f3bc
 ++}
 ++
 ++Element* HTMLPictureElement::getMatchingSource(){
-++    NodeVector potentialSourceNodes;
-++    getChildNodes(this, potentialSourceNodes);
-++    for(    NodeVector::iterator it = potentialSourceNodes.begin();
-++            it != potentialSourceNodes.end();
-++            it++){
-++        RefPtr<Node> nodePtr = *it;
-++        Node* node = nodePtr.get();
-++        if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
-++            // TODO: Switch from upcasting to scanning child Elements
-++            return static_cast<Element*>(node);
+++    if(!m_hasSrc){
+++        NodeVector potentialSourceNodes;
+++        getChildNodes(this, potentialSourceNodes);
+++        for(    NodeVector::iterator it = potentialSourceNodes.begin();
+++                it != potentialSourceNodes.end();
+++                it++){
+++            RefPtr<Node> nodePtr = *it;
+++            Node* node = nodePtr.get();
+++            if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
+++                // TODO: Switch from upcasting to scanning child Elements
+++                return static_cast<Element*>(node);
+++            }   
 ++        }   
-++    }   
+++    }
 ++    return this;
 ++}
 ++
@@ -1247,13 +1290,21 @@ index 0000000..962f3bc
 ++    updateResources();
 ++}
 ++
+++void HTMLPictureElement::parseAttribute(const Attribute& attribute)
+++{
+++    if(attribute.name() == srcAttr)
+++        m_hasSrc = true;
+++
+++    HTMLImageElement::parseAttribute(attribute);
+++}
+++
 ++}
 +diff --git html/HTMLPictureElement.h html/HTMLPictureElement.h
 +new file mode 100644
-+index 0000000..cfab253
++index 0000000..369bad3
 +--- /dev/null
 ++++ html/HTMLPictureElement.h
-+@@ -0,0 +1,51 @@
++@@ -0,0 +1,54 @@
 ++/*
 ++ * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
 ++ *           (C) 1999 Antti Koivisto (koivisto@kde.org)
@@ -1292,6 +1343,9 @@ index 0000000..962f3bc
 ++    Element* getMatchingSource();
 ++
 ++    virtual bool isPictureElement() const { return true; }
+++    virtual void parseAttribute(const Attribute&);
+++
+++    bool m_hasSrc;
 ++
 ++public:
 ++    static PassRefPtr<HTMLPictureElement> create(Document* document);
@@ -1373,10 +1427,10 @@ index 0000000..962f3bc
 + input constructorNeedsFormElement, constructorNeedsCreatedByParser
 + intent conditional=WEB_INTENTS_TAG
 +diff --git html/parser/HTMLPreloadScanner.cpp html/parser/HTMLPreloadScanner.cpp
-+index a75b52e..9e37c41 100644
++index a75b52e..e4c7d41 100644
 +--- html/parser/HTMLPreloadScanner.cpp
 ++++ html/parser/HTMLPreloadScanner.cpp
-+@@ -45,11 +45,12 @@ using namespace HTMLNames;
++@@ -45,18 +45,24 @@ using namespace HTMLNames;
 + 
 + class PreloadTask {
 + public:
@@ -1387,21 +1441,30 @@ index 0000000..962f3bc
 +         , m_linkMediaAttributeIsScreen(true)
 +         , m_inputIsImage(false)
 ++        , m_inPictureSubTree(inPicture)
+++	, m_pictureHasSrc(false)
 +     {
 +         processAttributes(token.attributes());
 +     }
-+@@ -57,6 +58,7 @@ public:
++ 
+++    bool pictureHasSrc(){return m_pictureHasSrc;}
+++
 +     void processAttributes(const HTMLToken::AttributeList& attributes)
 +     {
 +         if (m_tagName != imgTag
 ++            && (m_tagName != sourceTag || !m_inPictureSubTree)
+++            && m_tagName != pictureTag 
 +             && m_tagName != inputTag
 +             && m_tagName != linkTag
 +             && m_tagName != scriptTag
-+@@ -74,6 +76,12 @@ public:
++@@ -74,6 +80,17 @@ public:
 +             if (m_tagName == scriptTag || m_tagName == imgTag) {
 +                 if (attributeName == srcAttr)
 +                     setUrlToLoad(attributeValue);
+++            } else if (m_tagName == pictureTag) {
+++                if (attributeName == srcAttr) {
+++		    setUrlToLoad(attributeValue);
+++		    m_pictureHasSrc= false;
+++		}
 ++            } else if (m_tagName == sourceTag) {
 ++                if (attributeName == srcAttr){
 ++                    setUrlToLoad(attributeValue);
@@ -1411,7 +1474,7 @@ index 0000000..962f3bc
 +             } else if (m_tagName == linkTag) {
 +                 if (attributeName == hrefAttr)
 +                     setUrlToLoad(attributeValue);
-+@@ -99,6 +107,10 @@ public:
++@@ -99,6 +116,10 @@ public:
 +         return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
 +     }
 + 
@@ -1422,26 +1485,27 @@ index 0000000..962f3bc
 +     static bool linkMediaAttributeIsScreen(const String& attributeValue)
 +     {
 +         if (attributeValue.isEmpty())
-+@@ -130,7 +142,7 @@ public:
++@@ -130,7 +151,7 @@ public:
 +         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
 +         if (m_tagName == scriptTag)
 +             cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
 +-        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage))
-++        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
+++        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || m_tagName == pictureTag || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
 +             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
 +         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
 +             cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
-+@@ -146,7 +158,9 @@ private:
++@@ -146,7 +167,10 @@ private:
 +     String m_baseElementHref;
 +     bool m_linkIsStyleSheet;
 +     bool m_linkMediaAttributeIsScreen;
 ++    bool m_pictureMediaAttributeMatches;
 +     bool m_inputIsImage;
 ++    bool m_inPictureSubTree;
+++    bool m_pictureHasSrc;
 + };
 + 
 + HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
-+@@ -187,10 +201,17 @@ void HTMLPreloadScanner::processToken()
++@@ -187,10 +211,17 @@ void HTMLPreloadScanner::processToken()
 +         }
 +     }
 + 
@@ -1460,7 +1524,7 @@ index 0000000..962f3bc
 +     m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
 + 
 +     if (task.tagName() == bodyTag)
-+@@ -199,6 +220,10 @@ void HTMLPreloadScanner::processToken()
++@@ -199,10 +230,16 @@ void HTMLPreloadScanner::processToken()
 +     if (task.tagName() == styleTag)
 +         m_inStyle = true;
 + 
@@ -1471,44 +1535,16 @@ index 0000000..962f3bc
 +     if (task.tagName() == baseTag)
 +         updatePredictedBaseElementURL(KURL(m_document->url(), task.baseElementHref()));
 + 
++     task.preload(m_document, scanningBody(), m_predictedBaseElementURL.isEmpty() ? m_document->baseURL() : m_predictedBaseElementURL);
+++
+++    m_inPicture = !task.pictureHasSrc();
++ }
++ 
++ bool HTMLPreloadScanner::scanningBody() const
 +diff --git html/parser/HTMLPreloadScanner.h html/parser/HTMLPreloadScanner.h
 +index 38f5772..440b114 100644
 +--- html/parser/HTMLPreloadScanner.h
 ++++ html/parser/HTMLPreloadScanner.h
 +@@ -58,6 +58,7 @@ private:
-+     HTMLToken m_token;
-+     bool m_bodySeen;
-+     bool m_inStyle;
-++    bool m_inPicture;
-+     KURL m_predictedBaseElementURL;
-+ };
-+ 
-+diff --git page/DOMWindow.idl page/DOMWindow.idl
-+index 0e104b6..df8f410 100644
-+--- page/DOMWindow.idl
-++++ page/DOMWindow.idl
-+@@ -427,6 +427,7 @@
-+     attribute HTMLHtmlElementConstructor HTMLHtmlElement;
-+     attribute HTMLIFrameElementConstructor HTMLIFrameElement;
-+     attribute HTMLImageElementConstructor HTMLImageElement;
-++    attribute HTMLPictureElementConstructor HTMLPictureElement;
-+     attribute HTMLInputElementConstructor HTMLInputElement;
-+     attribute HTMLKeygenElementConstructor HTMLKeygenElement;
-+     attribute HTMLLIElementConstructor HTMLLIElement;
-+diff --git pictureElementImplementationPlan.md pictureElementImplementationPlan.md
-+new file mode 100644
-+index 0000000..6865962
-+--- /dev/null
-++++ pictureElementImplementationPlan.md
-+@@ -0,0 +1,13 @@
-++steps towards a working picture element
-++--------------------
-++* HTMLPictureElement: public HTMLImageElement
-++* Should also inherit lots of functionality from HTMLMediaElement. Not
-++  yet sure how
-++* What do we want to do with ImageInnerElement? Should we duplicate a
-++  similar one as HTMLPictureElement's shadow DOM, and can we use it as is?
-++* Add handling of <picture> tag to the PreloadScanner
-++ - need to look for <source> and load them according to media
-++* How can 
++    
 \ No newline at end of file

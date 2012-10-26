@@ -31,10 +31,11 @@ What should be working:
 * `<picture><source src></picture>` should work. The *first* source
   should be fetched by the PreloadScanner and then displayed when the
 element is parsed.
+* `<picture src></picture>` prefetches and displays the resource. It
+overrides inner `<source>` tags if present
 
 What shouldn't be working (yet):
 --------------------
 * The `media` attribute is not yet supported in either the PreloadScanner or the actual parser.
 * The `srcset` attribute is not yet supported in either the PreloadScanner or the actual parser.
-* `<picture src></picture>` fetches the resource, but doesn't display it.
 
