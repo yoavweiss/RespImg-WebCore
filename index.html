@@ -8,9 +8,14 @@
     </head>
     <body>
         <p>This is a test page for the picture element prototype.</p>
-        <picture src="picturesrc.jpg" >
-            <source src="picturesource.jpg">
+        <picture src="src.jpg" >
+            <source src="source_200.jpg">
             </picture>
-            <img src="image.jpg">
+        <picture>
+            <source src="source.jpg" media="screen and (min-width:2000px)">
+            <source src="source_400.jpg" media="screen and (min-width:600px)">
+            <source src="source_300.jpg" media="screen and (min-width:400px)">
+        </picture>
+        <img src="image.jpg"> 
     </body>
 </html>
