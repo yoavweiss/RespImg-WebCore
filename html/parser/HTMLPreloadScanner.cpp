@@ -92,7 +92,7 @@ public:
                 if (attributeName == srcAttr)
                     setUrlToLoad(attributeValue);
                 else if (attributeName == mediaAttr)
-                    m_pictureMediaAttributeMatches = pictureMediaAttributeMatches(attributeValue);
+                    m_sourceMediaAttributeMatches = sourceMediaAttributeMatches(attributeValue);
             } else if (m_tagName == linkTag) {
                 if (attributeName == hrefAttr)
                     setUrlToLoad(attributeValue);
