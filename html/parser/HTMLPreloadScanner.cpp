@@ -52,14 +52,14 @@ public:
         , m_linkMediaAttributeIsScreen(true)
         , m_inputIsImage(false)
         , m_inPictureSubTree(inPicture)
-        , m_pictureHasSrc(false)
+        , m_picturePreloaded(false)
         , m_frame(frame)
         , m_renderStyle(renderStyle)
     {
         processAttributes(token.attributes());
     }
 
-    bool pictureHasSrc(){return m_pictureHasSrc;}
+    bool picturePreloaded(){return m_picturePreloaded;}
 
     void processAttributes(const HTMLToken::AttributeList& attributes)
     {
@@ -86,7 +86,7 @@ public:
             } else if (m_tagName == pictureTag) {
                 if (attributeName == srcAttr) {
                     setUrlToLoad(attributeValue);
-                    m_pictureHasSrc = false;
+                    m_picturePreloaded = true;
                 }
             } else if (m_tagName == sourceTag) {
                 if (attributeName == srcAttr)
@@ -159,8 +159,11 @@ public:
         else if ( m_tagName == imgTag || 
                   (m_tagName == inputTag && m_inputIsImage) || 
                   m_tagName == pictureTag || 
-                  (m_tagName == sourceTag && m_sourceMediaAttributeMatches && !m_pictureHasSrc))
+                  (m_tagName == sourceTag && m_sourceMediaAttributeMatches && !m_picturePreloaded)){
             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
+            if(m_tagName == sourceTag)
+                m_picturePreloaded = true;
+        }
         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
             cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
     }
@@ -178,7 +181,7 @@ private:
     bool m_sourceMediaAttributeMatches;
     bool m_inputIsImage;
     bool m_inPictureSubTree;
-    bool m_pictureHasSrc;
+    bool m_picturePreloaded;
     Frame* m_frame;
     RenderStyle* m_renderStyle;
 };
@@ -250,7 +253,7 @@ void HTMLPreloadScanner::processToken()
 
     task.preload(m_document, scanningBody(), m_predictedBaseElementURL.isEmpty() ? m_document->baseURL() : m_predictedBaseElementURL);
 
-    m_inPicture = !task.pictureHasSrc();
+    m_inPicture = !task.picturePreloaded();
 }
 
 bool HTMLPreloadScanner::scanningBody() const
