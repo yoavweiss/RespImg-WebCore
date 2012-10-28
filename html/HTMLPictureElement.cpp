@@ -75,7 +75,6 @@ Element* HTMLPictureElement::getMatchingSource(){
             RefPtr<Node> nodePtr = *it;
             Node* node = nodePtr.get();
             if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
-                // TODO: Switch from upcasting to scanning child Elements
                 HTMLSourceElement* source = static_cast<HTMLSourceElement*>(node);
                 Document* document = documentInternal();
                 if (source->fastHasAttribute(srcAttr)) {

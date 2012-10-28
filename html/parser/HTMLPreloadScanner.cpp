@@ -118,7 +118,7 @@ public:
         return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
     }
 
-    bool pictureMediaAttributeMatches(const String& attributeValue){
+    bool sourceMediaAttributeMatches(const String& attributeValue){
         if (attributeValue.isEmpty())
             return true;
         RefPtr<MediaQuerySet> mediaQueries = MediaQuerySet::createAllowingDescriptionSyntax(attributeValue);
@@ -156,9 +156,11 @@ public:
         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
         if (m_tagName == scriptTag)
             cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
-        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || m_tagName == pictureTag || (m_tagName == sourceTag && m_pictureMediaAttributeMatches)){
+        else if ( m_tagName == imgTag || 
+                  (m_tagName == inputTag && m_inputIsImage) || 
+                  m_tagName == pictureTag || 
+                  (m_tagName == sourceTag && m_sourceMediaAttributeMatches && !m_pictureHasSrc))
             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
-        }
         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
             cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
     }
@@ -173,7 +175,7 @@ private:
     String m_baseElementHref;
     bool m_linkIsStyleSheet;
     bool m_linkMediaAttributeIsScreen;
-    bool m_pictureMediaAttributeMatches;
+    bool m_sourceMediaAttributeMatches;
     bool m_inputIsImage;
     bool m_inPictureSubTree;
     bool m_pictureHasSrc;

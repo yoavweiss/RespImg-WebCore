@@ -80,10 +80,10 @@ index 40f1391..d587d60 100644
  	$(WebCore)/html/HTMLLIElement.idl \
 diff --git README.md README.md
 new file mode 100644
-index 0000000..c648e35
+index 0000000..dba805a
 --- /dev/null
 +++ README.md
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,41 @@
 +The Responsive Images WebCore fork!!!
 +--------------------
 +
@@ -117,12 +117,13 @@ index 0000000..c648e35
 +* `<picture><source src></picture>` should work. The *first* source
 +  should be fetched by the PreloadScanner and then displayed when the
 +element is parsed.
++* `<picture src></picture>` prefetches and displays the resource. It
++overrides inner `<source>` tags if present
 +
 +What shouldn't be working (yet):
 +--------------------
 +* The `media` attribute is not yet supported in either the PreloadScanner or the actual parser.
 +* The `srcset` attribute is not yet supported in either the PreloadScanner or the actual parser.
-+* `<picture src></picture>` fetches the resource, but doesn't display it.
 +
 diff --git Target.pri Target.pri
 index 3a04feb..3498bb8 100644
@@ -404,10 +405,10 @@ index 9468a79..bd65f6b 100644
  
 diff --git html/HTMLPictureElement.cpp html/HTMLPictureElement.cpp
 new file mode 100644
-index 0000000..70fac59
+index 0000000..a7c7d3e
 --- /dev/null
 +++ html/HTMLPictureElement.cpp
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,110 @@
 +/*
 + * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
 + *           (C) 1999 Antti Koivisto (koivisto@kde.org)
@@ -433,6 +434,10 @@ index 0000000..70fac59
 +#include "config.h"
 +#include "HTMLImageElement.h"
 +#include "HTMLPictureElement.h"
++
++#include "MediaList.h"
++#include "MediaQueryEvaluator.h"
++#include "StyleResolver.h"
 +
 +using namespace std;
 +
@@ -481,8 +486,19 @@ index 0000000..70fac59
 +            RefPtr<Node> nodePtr = *it;
 +            Node* node = nodePtr.get();
 +            if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
-+                // TODO: Switch from upcasting to scanning child Elements
-+                return static_cast<Element*>(node);
++                HTMLSourceElement* source = static_cast<HTMLSourceElement*>(node);
++                Document* document = documentInternal();
++                if (source->fastHasAttribute(srcAttr)) {
++                    if (!source->fastHasAttribute(mediaAttr)) {
++                        return source;
++                    }
++                    RefPtr<MediaQuerySet> mediaQueries = MediaQuerySet::createAllowingDescriptionSyntax(source->media());
++                    RefPtr<RenderStyle> documentStyle = StyleResolver::styleForDocument(document, 0);
++                    MediaQueryEvaluator mediaQueryEvaluator("screen", document->frame(), documentStyle.get());
++                    if(mediaQueryEvaluator.eval(mediaQueries.get())){
++                        return source;
++                    }
++                }
 +            }   
 +        }   
 +    }
@@ -598,7 +614,7 @@ index 0000000..3093c6e
 +
 +}
 diff --git html/HTMLSourceElement.cpp html/HTMLSourceElement.cpp
-index 4ac537b..816b805 100644
+index 4ac537b..4055bb8 100644
 --- html/HTMLSourceElement.cpp
 +++ html/HTMLSourceElement.cpp
 @@ -32,6 +32,7 @@
@@ -618,6 +634,30 @@ index 4ac537b..816b805 100644
      return InsertionDone;
  }
  
+@@ -78,6 +81,11 @@ void HTMLSourceElement::setSrc(const String& url)
+     setAttribute(srcAttr, url);
+ }
+ 
++String HTMLSourceElement::src() const
++{
++    return getAttribute(srcAttr);
++}
++
+ String HTMLSourceElement::media() const
+ {
+     return getAttribute(mediaAttr);
+diff --git html/HTMLSourceElement.h html/HTMLSourceElement.h
+index 15920e3..0e9446c 100644
+--- html/HTMLSourceElement.h
++++ html/HTMLSourceElement.h
+@@ -37,6 +37,7 @@ class HTMLSourceElement : public HTMLElement {
+ public:
+     static PassRefPtr<HTMLSourceElement> create(const QualifiedName&, Document*);
+ 
++    String src() const;
+     String media() const;
+     String type() const;
+     void setSrc(const String&);    
 diff --git html/HTMLTagNames.in html/HTMLTagNames.in
 index 3660ab9..0155115 100644
 --- html/HTMLTagNames.in
@@ -631,21 +671,31 @@ index 3660ab9..0155115 100644
  input constructorNeedsFormElement, constructorNeedsCreatedByParser
  intent conditional=WEB_INTENTS_TAG
 diff --git html/parser/HTMLPreloadScanner.cpp html/parser/HTMLPreloadScanner.cpp
-index a75b52e..e4c7d41 100644
+index a75b52e..c4856d0 100644
 --- html/parser/HTMLPreloadScanner.cpp
 +++ html/parser/HTMLPreloadScanner.cpp
-@@ -45,18 +45,24 @@ using namespace HTMLNames;
+@@ -38,6 +38,7 @@
+ #include "LinkRelAttribute.h"
+ #include "MediaList.h"
+ #include "MediaQueryEvaluator.h"
++#include "StyleResolver.h"
+ 
+ namespace WebCore {
+ 
+@@ -45,18 +46,26 @@ using namespace HTMLNames;
  
  class PreloadTask {
  public:
 -    explicit PreloadTask(const HTMLToken& token)
-+    explicit PreloadTask(const HTMLToken& token, bool inPicture)
++    explicit PreloadTask(const HTMLToken& token, bool inPicture, Frame* frame, RenderStyle* renderStyle)
          : m_tagName(token.name().data(), token.name().size())
          , m_linkIsStyleSheet(false)
          , m_linkMediaAttributeIsScreen(true)
          , m_inputIsImage(false)
 +        , m_inPictureSubTree(inPicture)
-+	, m_pictureHasSrc(false)
++        , m_pictureHasSrc(false)
++        , m_frame(frame)
++        , m_renderStyle(renderStyle)
      {
          processAttributes(token.attributes());
      }
@@ -660,56 +710,63 @@ index a75b52e..e4c7d41 100644
              && m_tagName != inputTag
              && m_tagName != linkTag
              && m_tagName != scriptTag
-@@ -74,6 +80,17 @@ public:
+@@ -74,6 +83,16 @@ public:
              if (m_tagName == scriptTag || m_tagName == imgTag) {
                  if (attributeName == srcAttr)
                      setUrlToLoad(attributeValue);
 +            } else if (m_tagName == pictureTag) {
 +                if (attributeName == srcAttr) {
-+		    setUrlToLoad(attributeValue);
-+		    m_pictureHasSrc= false;
-+		}
-+            } else if (m_tagName == sourceTag) {
-+                if (attributeName == srcAttr){
 +                    setUrlToLoad(attributeValue);
++                    m_pictureHasSrc = false;
 +                }
++            } else if (m_tagName == sourceTag) {
++                if (attributeName == srcAttr)
++                    setUrlToLoad(attributeValue);
 +                else if (attributeName == mediaAttr)
 +                    m_pictureMediaAttributeMatches = pictureMediaAttributeMatches(attributeValue);
              } else if (m_tagName == linkTag) {
                  if (attributeName == hrefAttr)
                      setUrlToLoad(attributeValue);
-@@ -99,6 +116,10 @@ public:
+@@ -99,6 +118,13 @@ public:
          return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
      }
  
-+    static bool pictureMediaAttributeMatches(const String& attributeValue){
-+
-+        return true;
++    bool sourceMediaAttributeMatches(const String& attributeValue){
++        if (attributeValue.isEmpty())
++            return true;
++        RefPtr<MediaQuerySet> mediaQueries = MediaQuerySet::createAllowingDescriptionSyntax(attributeValue);
++        MediaQueryEvaluator mediaQueryEvaluator("screen", m_frame, m_renderStyle);
++        return mediaQueryEvaluator.eval(mediaQueries.get());
 +    }
      static bool linkMediaAttributeIsScreen(const String& attributeValue)
      {
          if (attributeValue.isEmpty())
-@@ -130,7 +151,7 @@ public:
+@@ -130,7 +156,10 @@ public:
          ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
          if (m_tagName == scriptTag)
              cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
 -        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage))
-+        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || m_tagName == pictureTag || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
++        else if ( m_tagName == imgTag || 
++                  (m_tagName == inputTag && m_inputIsImage) || 
++                  m_tagName == pictureTag || 
++                  (m_tagName == sourceTag && m_sourceMediaAttributeMatches && !m_pictureHasSrc))
              cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
          else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
              cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
-@@ -146,7 +167,10 @@ private:
+@@ -146,7 +175,12 @@ private:
      String m_baseElementHref;
      bool m_linkIsStyleSheet;
      bool m_linkMediaAttributeIsScreen;
-+    bool m_pictureMediaAttributeMatches;
++    bool m_sourceMediaAttributeMatches;
      bool m_inputIsImage;
 +    bool m_inPictureSubTree;
 +    bool m_pictureHasSrc;
++    Frame* m_frame;
++    RenderStyle* m_renderStyle;
  };
  
  HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
-@@ -187,10 +211,17 @@ void HTMLPreloadScanner::processToken()
+@@ -187,10 +221,18 @@ void HTMLPreloadScanner::processToken()
          }
      }
  
@@ -724,11 +781,12 @@ index a75b52e..e4c7d41 100644
          return;
  
 -    PreloadTask task(m_token);
-+    PreloadTask task(m_token, m_inPicture);
++    RefPtr<RenderStyle> documentStyle = StyleResolver::styleForDocument(m_document, 0);
++    PreloadTask task(m_token, m_inPicture, m_document->frame(), documentStyle.get());
      m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
  
      if (task.tagName() == bodyTag)
-@@ -199,10 +230,16 @@ void HTMLPreloadScanner::processToken()
+@@ -199,10 +241,16 @@ void HTMLPreloadScanner::processToken()
      if (task.tagName() == styleTag)
          m_inStyle = true;
  
@@ -769,31 +827,12 @@ index 0e104b6..df8f410 100644
      attribute HTMLInputElementConstructor HTMLInputElement;
      attribute HTMLKeygenElementConstructor HTMLKeygenElement;
      attribute HTMLLIElementConstructor HTMLLIElement;
-diff --git pictureElementImplementationPlan.md pictureElementImplementationPlan.md
-new file mode 100644
-index 0000000..6865962
---- /dev/null
-+++ pictureElementImplementationPlan.md
-@@ -0,0 +1,13 @@
-+steps towards a working picture element
-+--------------------
-+* HTMLPictureElement: public HTMLImageElement
-+* Should also inherit lots of functionality from HTMLMediaElement. Not
-+  yet sure how
-+* What do we want to do with ImageInnerElement? Should we duplicate a
-+  similar one as HTMLPictureElement's shadow DOM, and can we use it as is?
-+* Add handling of <picture> tag to the PreloadScanner
-+ - need to look for <source> and load them according to media
-+* How can I do media queries eval inside the preload scanner?
-+  MediaQueryMatcher? All I need to get started is get the window
-+dimensions from somewhere... 
-+* How can I scan source tags with the preload scanner?
 diff --git picture_patch.txt picture_patch.txt
 new file mode 100644
-index 0000000..e2e0eb8
+index 0000000..e0d9995
 --- /dev/null
 +++ picture_patch.txt
-@@ -0,0 +1,753 @@
+@@ -0,0 +1,750 @@
 +diff --git .gitignore .gitignore
 +index 5565643..84c7e47 100644
 +--- .gitignore
@@ -876,10 +915,10 @@ index 0000000..e2e0eb8
 + 	$(WebCore)/html/HTMLLIElement.idl \
 +diff --git README.md README.md
 +new file mode 100644
-+index 0000000..c648e35
++index 0000000..dba805a
 +--- /dev/null
 ++++ README.md
-+@@ -0,0 +1,40 @@
++@@ -0,0 +1,41 @@
 ++The Responsive Images WebCore fork!!!
 ++--------------------
 ++
@@ -913,12 +952,13 @@ index 0000000..e2e0eb8
 ++* `<picture><source src></picture>` should work. The *first* source
 ++  should be fetched by the PreloadScanner and then displayed when the
 ++element is parsed.
+++* `<picture src></picture>` prefetches and displays the resource. It
+++overrides inner `<source>` tags if present
 ++
 ++What shouldn't be working (yet):
 ++--------------------
 ++* The `media` attribute is not yet supported in either the PreloadScanner or the actual parser.
 ++* The `srcset` attribute is not yet supported in either the PreloadScanner or the actual parser.
-++* `<picture src></picture>` fetches the resource, but doesn't display it.
 ++
 +diff --git Target.pri Target.pri
 +index 3a04feb..3498bb8 100644
@@ -1200,10 +1240,10 @@ index 0000000..e2e0eb8
 + 
 +diff --git html/HTMLPictureElement.cpp html/HTMLPictureElement.cpp
 +new file mode 100644
-+index 0000000..70fac59
++index 0000000..a7c7d3e
 +--- /dev/null
 ++++ html/HTMLPictureElement.cpp
-+@@ -0,0 +1,95 @@
++@@ -0,0 +1,110 @@
 ++/*
 ++ * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
 ++ *           (C) 1999 Antti Koivisto (koivisto@kde.org)
@@ -1229,6 +1269,10 @@ index 0000000..e2e0eb8
 ++#include "config.h"
 ++#include "HTMLImageElement.h"
 ++#include "HTMLPictureElement.h"
+++
+++#include "MediaList.h"
+++#include "MediaQueryEvaluator.h"
+++#include "StyleResolver.h"
 ++
 ++using namespace std;
 ++
@@ -1277,8 +1321,19 @@ index 0000000..e2e0eb8
 ++            RefPtr<Node> nodePtr = *it;
 ++            Node* node = nodePtr.get();
 ++            if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
-++                // TODO: Switch from upcasting to scanning child Elements
-++                return static_cast<Element*>(node);
+++                HTMLSourceElement* source = static_cast<HTMLSourceElement*>(node);
+++                Document* document = documentInternal();
+++                if (source->fastHasAttribute(srcAttr)) {
+++                    if (!source->fastHasAttribute(mediaAttr)) {
+++                        return source;
+++                    }
+++                    RefPtr<MediaQuerySet> mediaQueries = MediaQuerySet::createAllowingDescriptionSyntax(source->media());
+++                    RefPtr<RenderStyle> documentStyle = StyleResolver::styleForDocument(document, 0);
+++                    MediaQueryEvaluator mediaQueryEvaluator("screen", document->frame(), documentStyle.get());
+++                    if(mediaQueryEvaluator.eval(mediaQueries.get())){
+++                        return source;
+++                    }
+++                }
 ++            }   
 ++        }   
 ++    }
@@ -1394,7 +1449,7 @@ index 0000000..e2e0eb8
 ++
 ++}
 +diff --git html/HTMLSourceElement.cpp html/HTMLSourceElement.cpp
-+index 4ac537b..816b805 100644
++index 4ac537b..4055bb8 100644
 +--- html/HTMLSourceElement.cpp
 ++++ html/HTMLSourceElement.cpp
 +@@ -32,6 +32,7 @@
@@ -1414,6 +1469,30 @@ index 0000000..e2e0eb8
 +     return InsertionDone;
 + }
 + 
++@@ -78,6 +81,11 @@ void HTMLSourceElement::setSrc(const String& url)
++     setAttribute(srcAttr, url);
++ }
++ 
+++String HTMLSourceElement::src() const
+++{
+++    return getAttribute(srcAttr);
+++}
+++
++ String HTMLSourceElement::media() const
++ {
++     return getAttribute(mediaAttr);
++diff --git html/HTMLSourceElement.h html/HTMLSourceElement.h
++index 15920e3..0e9446c 100644
++--- html/HTMLSourceElement.h
+++++ html/HTMLSourceElement.h
++@@ -37,6 +37,7 @@ class HTMLSourceElement : public HTMLElement {
++ public:
++     static PassRefPtr<HTMLSourceElement> create(const QualifiedName&, Document*);
++ 
+++    String src() const;
++     String media() const;
++     String type() const;
++     void setSrc(const String&);    
 +diff --git html/HTMLTagNames.in html/HTMLTagNames.in
 +index 3660ab9..0155115 100644
 +--- html/HTMLTagNames.in
@@ -1427,21 +1506,31 @@ index 0000000..e2e0eb8
 + input constructorNeedsFormElement, constructorNeedsCreatedByParser
 + intent conditional=WEB_INTENTS_TAG
 +diff --git html/parser/HTMLPreloadScanner.cpp html/parser/HTMLPreloadScanner.cpp
-+index a75b52e..e4c7d41 100644
++index a75b52e..c4856d0 100644
 +--- html/parser/HTMLPreloadScanner.cpp
 ++++ html/parser/HTMLPreloadScanner.cpp
-+@@ -45,18 +45,24 @@ using namespace HTMLNames;
++@@ -38,6 +38,7 @@
++ #include "LinkRelAttribute.h"
++ #include "MediaList.h"
++ #include "MediaQueryEvaluator.h"
+++#include "StyleResolver.h"
++ 
++ namespace WebCore {
++ 
++@@ -45,18 +46,26 @@ using namespace HTMLNames;
 + 
 + class PreloadTask {
 + public:
 +-    explicit PreloadTask(const HTMLToken& token)
-++    explicit PreloadTask(const HTMLToken& token, bool inPicture)
+++    explicit PreloadTask(const HTMLToken& token, bool inPicture, Frame* frame, RenderStyle* renderStyle)
 +         : m_tagName(token.name().data(), token.name().size())
 +         , m_linkIsStyleSheet(false)
 +         , m_linkMediaAttributeIsScreen(true)
 +         , m_inputIsImage(false)
 ++        , m_inPictureSubTree(inPicture)
-++	, m_pictureHasSrc(false)
+++        , m_pictureHasSrc(false)
+++        , m_frame(frame)
+++        , m_renderStyle(renderStyle)
 +     {
 +         processAttributes(token.attributes());
 +     }
@@ -1456,95 +1545,42 @@ index 0000000..e2e0eb8
 +             && m_tagName != inputTag
 +             && m_tagName != linkTag
 +             && m_tagName != scriptTag
-+@@ -74,6 +80,17 @@ public:
++@@ -74,6 +83,16 @@ public:
 +             if (m_tagName == scriptTag || m_tagName == imgTag) {
 +                 if (attributeName == srcAttr)
 +                     setUrlToLoad(attributeValue);
 ++            } else if (m_tagName == pictureTag) {
 ++                if (attributeName == srcAttr) {
-++		    setUrlToLoad(attributeValue);
-++		    m_pictureHasSrc= false;
-++		}
-++            } else if (m_tagName == sourceTag) {
-++                if (attributeName == srcAttr){
 ++                    setUrlToLoad(attributeValue);
+++                    m_pictureHasSrc = false;
 ++                }
+++            } else if (m_tagName == sourceTag) {
+++                if (attributeName == srcAttr)
+++                    setUrlToLoad(attributeValue);
 ++                else if (attributeName == mediaAttr)
 ++                    m_pictureMediaAttributeMatches = pictureMediaAttributeMatches(attributeValue);
 +             } else if (m_tagName == linkTag) {
 +                 if (attributeName == hrefAttr)
 +                     setUrlToLoad(attributeValue);
-+@@ -99,6 +116,10 @@ public:
++@@ -99,6 +118,13 @@ public:
 +         return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
 +     }
 + 
-++    static bool pictureMediaAttributeMatches(const String& attributeValue){
-++
-++        return true;
+++    bool sourceMediaAttributeMatches(const String& attributeValue){
+++        if (attributeValue.isEmpty())
+++            return true;
+++        RefPtr<MediaQuerySet> mediaQueries = MediaQuerySet::createAllowingDescriptionSyntax(attributeValue);
+++        MediaQueryEvaluator mediaQueryEvaluator("screen", m_frame, m_renderStyle);
+++        return mediaQueryEvaluator.eval(mediaQueries.get());
 ++    }
 +     static bool linkMediaAttributeIsScreen(const String& attributeValue)
 +     {
 +         if (attributeValue.isEmpty())
-+@@ -130,7 +151,7 @@ public:
++@@ -130,7 +156,10 @@ public:
 +         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
 +         if (m_tagName == scriptTag)
 +             cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
 +-        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage))
-++        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || m_tagName == pictureTag || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
-+             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
-+         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
-+             cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
-+@@ -146,7 +167,10 @@ private:
-+     String m_baseElementHref;
-+     bool m_linkIsStyleSheet;
-+     bool m_linkMediaAttributeIsScreen;
-++    bool m_pictureMediaAttributeMatches;
-+     bool m_inputIsImage;
-++    bool m_inPictureSubTree;
-++    bool m_pictureHasSrc;
-+ };
-+ 
-+ HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
-+@@ -187,10 +211,17 @@ void HTMLPreloadScanner::processToken()
-+         }
-+     }
-+ 
-++    if (m_inPicture && (m_token.type() == HTMLTokenTypes::EndTag)){
-++        AtomicString tagName(m_token.name().data(), m_token.name().size());
-++        if(tagName == pictureTag){
-++            m_inPicture = false;
-++        }
-++    }
-++
-+     if (m_token.type() != HTMLTokenTypes::StartTag)
-+         return;
-+ 
-+-    PreloadTask task(m_token);
-++    PreloadTask task(m_token, m_inPicture);
-+     m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
-+ 
-+     if (task.tagName() == bodyTag)
-+@@ -199,10 +230,16 @@ void HTMLPreloadScanner::processToken()
-+     if (task.tagName() == styleTag)
-+         m_inStyle = true;
-+ 
-++    if (task.tagName() == pictureTag){
-++        m_inPicture = true;
-++    }
-++
-+     if (task.tagName() == baseTag)
-+         updatePredictedBaseElementURL(KURL(m_document->url(), task.baseElementHref()));
-+ 
-+     task.preload(m_document, scanningBody(), m_predictedBaseElementURL.isEmpty() ? m_document->baseURL() : m_predictedBaseElementURL);
-++
-++    m_inPicture = !task.pictureHasSrc();
-+ }
-+ 
-+ bool HTMLPreloadScanner::scanningBody() const
-+diff --git html/parser/HTMLPreloadScanner.h html/parser/HTMLPreloadScanner.h
-+index 38f5772..440b114 100644
-+--- html/parser/HTMLPreloadScanner.h
-++++ html/parser/HTMLPreloadScanner.h
-+@@ -58,6 +58,7 @@ private:
-+    
+++        else if ( m_tagName == imgTag || 
+++                  (m
 \ No newline at end of file
