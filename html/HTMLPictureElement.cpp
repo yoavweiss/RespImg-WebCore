@@ -24,6 +24,10 @@
 #include "HTMLImageElement.h"
 #include "HTMLPictureElement.h"
 
+#include "MediaList.h"
+#include "MediaQueryEvaluator.h"
+#include "StyleResolver.h"
+
 using namespace std;
 
 namespace WebCore {
@@ -72,7 +76,19 @@ Element* HTMLPictureElement::getMatchingSource(){
             Node* node = nodePtr.get();
             if (node && (node->hasTagName(sourceTag)) && (node->parentNode() == this)){
                 // TODO: Switch from upcasting to scanning child Elements
-                return static_cast<Element*>(node);
+                HTMLSourceElement* source = static_cast<HTMLSourceElement*>(node);
+                Document* document = documentInternal();
+                if (source->fastHasAttribute(srcAttr)) {
+                    if (!source->fastHasAttribute(mediaAttr)) {
+                        return source;
+                    }
+                    RefPtr<MediaQuerySet> mediaQueries = MediaQuerySet::createAllowingDescriptionSyntax(source->media());
+                    RefPtr<RenderStyle> documentStyle = StyleResolver::styleForDocument(document, 0);
+                    MediaQueryEvaluator mediaQueryEvaluator("screen", document->frame(), documentStyle.get());
+                    if(mediaQueryEvaluator.eval(mediaQueries.get())){
+                        return source;
+                    }
+                }
             }   
         }   
     }

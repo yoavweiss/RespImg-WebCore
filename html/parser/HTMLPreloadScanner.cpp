@@ -38,6 +38,7 @@
 #include "LinkRelAttribute.h"
 #include "MediaList.h"
 #include "MediaQueryEvaluator.h"
+#include "StyleResolver.h"
 
 namespace WebCore {
 
@@ -45,13 +46,15 @@ using namespace HTMLNames;
 
 class PreloadTask {
 public:
-    explicit PreloadTask(const HTMLToken& token, bool inPicture)
+    explicit PreloadTask(const HTMLToken& token, bool inPicture, Frame* frame, RenderStyle* renderStyle)
         : m_tagName(token.name().data(), token.name().size())
         , m_linkIsStyleSheet(false)
         , m_linkMediaAttributeIsScreen(true)
         , m_inputIsImage(false)
         , m_inPictureSubTree(inPicture)
-	, m_pictureHasSrc(false)
+        , m_pictureHasSrc(false)
+        , m_frame(frame)
+        , m_renderStyle(renderStyle)
     {
         processAttributes(token.attributes());
     }
@@ -82,13 +85,12 @@ public:
                     setUrlToLoad(attributeValue);
             } else if (m_tagName == pictureTag) {
                 if (attributeName == srcAttr) {
-		    setUrlToLoad(attributeValue);
-		    m_pictureHasSrc= false;
-		}
-            } else if (m_tagName == sourceTag) {
-                if (attributeName == srcAttr){
                     setUrlToLoad(attributeValue);
+                    m_pictureHasSrc = false;
                 }
+            } else if (m_tagName == sourceTag) {
+                if (attributeName == srcAttr)
+                    setUrlToLoad(attributeValue);
                 else if (attributeName == mediaAttr)
                     m_pictureMediaAttributeMatches = pictureMediaAttributeMatches(attributeValue);
             } else if (m_tagName == linkTag) {
@@ -116,9 +118,12 @@ public:
         return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
     }
 
-    static bool pictureMediaAttributeMatches(const String& attributeValue){
-
-        return true;
+    bool pictureMediaAttributeMatches(const String& attributeValue){
+        if (attributeValue.isEmpty())
+            return true;
+        RefPtr<MediaQuerySet> mediaQueries = MediaQuerySet::createAllowingDescriptionSyntax(attributeValue);
+        MediaQueryEvaluator mediaQueryEvaluator("screen", m_frame, m_renderStyle);
+        return mediaQueryEvaluator.eval(mediaQueries.get());
     }
     static bool linkMediaAttributeIsScreen(const String& attributeValue)
     {
@@ -151,8 +156,9 @@ public:
         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
         if (m_tagName == scriptTag)
             cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
-        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || m_tagName == pictureTag || (m_tagName == sourceTag && m_pictureMediaAttributeMatches))
+        else if (m_tagName == imgTag || (m_tagName == inputTag && m_inputIsImage) || m_tagName == pictureTag || (m_tagName == sourceTag && m_pictureMediaAttributeMatches)){
             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
+        }
         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
             cachedResourceLoader->preload(CachedResource::CSSStyleSheet, request, m_charset, scanningBody);
     }
@@ -171,6 +177,8 @@ private:
     bool m_inputIsImage;
     bool m_inPictureSubTree;
     bool m_pictureHasSrc;
+    Frame* m_frame;
+    RenderStyle* m_renderStyle;
 };
 
 HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
@@ -221,7 +229,8 @@ void HTMLPreloadScanner::processToken()
     if (m_token.type() != HTMLTokenTypes::StartTag)
         return;
 
-    PreloadTask task(m_token, m_inPicture);
+    RefPtr<RenderStyle> documentStyle = StyleResolver::styleForDocument(m_document, 0);
+    PreloadTask task(m_token, m_inPicture, m_document->frame(), documentStyle.get());
     m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
 
     if (task.tagName() == bodyTag)

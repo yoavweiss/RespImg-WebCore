@@ -81,6 +81,11 @@ void HTMLSourceElement::setSrc(const String& url)
     setAttribute(srcAttr, url);
 }
 
+String HTMLSourceElement::src() const
+{
+    return getAttribute(srcAttr);
+}
+
 String HTMLSourceElement::media() const
 {
     return getAttribute(mediaAttr);
