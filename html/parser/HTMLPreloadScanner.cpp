@@ -46,13 +46,13 @@ using namespace HTMLNames;
 
 class PreloadTask {
 public:
-    explicit PreloadTask(const HTMLToken& token, bool inPicture, Frame* frame, RenderStyle* renderStyle)
+    explicit PreloadTask(const HTMLToken& token, bool inPicture, bool picturePreloaded, Frame* frame, RenderStyle* renderStyle)
         : m_tagName(token.name().data(), token.name().size())
         , m_linkIsStyleSheet(false)
         , m_linkMediaAttributeIsScreen(true)
         , m_inputIsImage(false)
         , m_inPictureSubTree(inPicture)
-        , m_picturePreloaded(false)
+        , m_picturePreloaded(picturePreloaded)
         , m_frame(frame)
         , m_renderStyle(renderStyle)
     {
@@ -63,8 +63,8 @@ public:
 
     void processAttributes(const HTMLToken::AttributeList& attributes)
     {
-        if (m_tagName != imgTag
-            && (m_tagName != sourceTag || !m_inPictureSubTree)
+        if ((m_tagName != imgTag || m_inPictureSubTree)
+            && (m_tagName != sourceTag || !m_inPictureSubTree || m_picturePreloaded)
             && m_tagName != pictureTag 
             && m_tagName != inputTag
             && m_tagName != linkTag
@@ -161,7 +161,7 @@ public:
                   m_tagName == pictureTag || 
                   (m_tagName == sourceTag && m_sourceMediaAttributeMatches && !m_picturePreloaded)){
             cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
-            if(m_tagName == sourceTag)
+            if(m_tagName == sourceTag || m_tagName == pictureTag)
                 m_picturePreloaded = true;
         }
         else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
@@ -192,6 +192,8 @@ HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
     , m_tokenizer(HTMLTokenizer::create(HTMLDocumentParser::usePreHTML5ParserQuirks(document)))
     , m_bodySeen(false)
     , m_inStyle(false)
+    , m_inPicture(false)
+    , m_picturePreloadedSource(false)
 {
 }
 
@@ -235,7 +237,7 @@ void HTMLPreloadScanner::processToken()
         return;
 
     RefPtr<RenderStyle> documentStyle = StyleResolver::styleForDocument(m_document, 0);
-    PreloadTask task(m_token, m_inPicture, m_document->frame(), documentStyle.get());
+    PreloadTask task(m_token, m_inPicture, m_picturePreloadedSource, m_document->frame(), documentStyle.get());
     m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
 
     if (task.tagName() == bodyTag)
@@ -253,7 +255,7 @@ void HTMLPreloadScanner::processToken()
 
     task.preload(m_document, scanningBody(), m_predictedBaseElementURL.isEmpty() ? m_document->baseURL() : m_predictedBaseElementURL);
 
-    m_inPicture = !task.picturePreloaded();
+    m_picturePreloadedSource = !task.picturePreloaded();
 }
 
 bool HTMLPreloadScanner::scanningBody() const

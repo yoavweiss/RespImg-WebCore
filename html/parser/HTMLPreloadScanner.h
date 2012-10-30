@@ -59,6 +59,7 @@ private:
     bool m_bodySeen;
     bool m_inStyle;
     bool m_inPicture;
+    bool m_picturePreloadedSource;
     KURL m_predictedBaseElementURL;
 };
 
