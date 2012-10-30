@@ -7,7 +7,7 @@ WebKit's WebCore library.
 It is based on Chromium's WebKit from 17/10/12.
 
 *Note*: This is a work in progress. It does not (yet) represent a full
-implementation of the `<picture>` element [specification](http://responsiveimagescg.github.com/picture-element/). Please file any
+implementation of the `<picture>` element [specification](http://picture.responsiveimages.org/). Please file any
 inconsistency with the specification as an issue.
 
 
