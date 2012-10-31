@@ -230,6 +230,7 @@ void HTMLPreloadScanner::processToken()
         AtomicString tagName(m_token.name().data(), m_token.name().size());
         if(tagName == pictureTag){
             m_inPicture = false;
+            m_picturePreloadedSource = false;
         }
     }
 
@@ -255,7 +256,7 @@ void HTMLPreloadScanner::processToken()
 
     task.preload(m_document, scanningBody(), m_predictedBaseElementURL.isEmpty() ? m_document->baseURL() : m_predictedBaseElementURL);
 
-    m_picturePreloadedSource = !task.picturePreloaded();
+    m_picturePreloadedSource = task.picturePreloaded();
 }
 
 bool HTMLPreloadScanner::scanningBody() const
