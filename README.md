@@ -20,11 +20,11 @@ Build instructions:
 
 Binaries:
 --------------------------
-* Ubuntu 64bit & OSX binaries can be found [here]( https://github.com/yoavweiss/RespImg-WebCore/downloads)
+* Ubuntu 64bit & OSX binaries can be found [here]( https://github.com/ResponsiveImagesCG/RespImg-WebCore/downloads)
 
 Test page:
 ---------------------
-Once you got your new binary, you can see `<picture>` in action [here] (http://yoavweiss.github.com/RespImg-WebCore/)
+Once you got your new binary, you can see `<picture>` in action [here] (http://demos.responsiveimages.org/)
 
 What should be working:
 --------------------

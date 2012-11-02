@@ -1,5 +1,5 @@
 diff --git .gitignore .gitignore
-index 5565643..84c7e47 100644
+index 5565643..c61f6e5 100644
 --- .gitignore
 +++ .gitignore
 @@ -259,3 +259,7 @@ v8.log
@@ -9,7 +9,7 @@ index 5565643..84c7e47 100644
 +*.orig
 +*.rej
 +*.vim
-+
++*.mod
 diff --git CMakeLists.txt CMakeLists.txt
 index f0fe4a9..77dd03e 100644
 --- CMakeLists.txt
@@ -80,7 +80,7 @@ index 40f1391..d587d60 100644
  	$(WebCore)/html/HTMLLIElement.idl \
 diff --git README.md README.md
 new file mode 100644
-index 0000000..0405694
+index 0000000..33e49dc
 --- /dev/null
 +++ README.md
 @@ -0,0 +1,43 @@
@@ -93,7 +93,7 @@ index 0000000..0405694
 +It is based on Chromium's WebKit from 17/10/12.
 +
 +*Note*: This is a work in progress. It does not (yet) represent a full
-+implementation of the `<picture>` element [specification](http://responsiveimagescg.github.com/picture-element/). Please file any
++implementation of the `<picture>` element [specification](http://picture.responsiveimages.org/). Please file any
 +inconsistency with the specification as an issue.
 +
 +
@@ -106,11 +106,11 @@ index 0000000..0405694
 +
 +Binaries:
 +--------------------------
-+* Ubuntu 64bit & OSX binaries can be found [here]( https://github.com/yoavweiss/RespImg-WebCore/downloads)
++* Ubuntu 64bit & OSX binaries can be found [here]( https://github.com/ResponsiveImagesCG/RespImg-WebCore/downloads)
 +
 +Test page:
 +---------------------
-+Once you got your new binary, you can see `<picture>` in action [here] (http://yoavweiss.github.com/RespImg-WebCore/)
++Once you got your new binary, you can see `<picture>` in action [here] (http://demos.responsiveimages.org/)
 +
 +What should be working:
 +--------------------
@@ -673,7 +673,7 @@ index 3660ab9..0155115 100644
  input constructorNeedsFormElement, constructorNeedsCreatedByParser
  intent conditional=WEB_INTENTS_TAG
 diff --git html/parser/HTMLPreloadScanner.cpp html/parser/HTMLPreloadScanner.cpp
-index a75b52e..928e860 100644
+index a75b52e..fad61d4 100644
 --- html/parser/HTMLPreloadScanner.cpp
 +++ html/parser/HTMLPreloadScanner.cpp
 @@ -38,6 +38,7 @@
@@ -689,13 +689,13 @@ index a75b52e..928e860 100644
  class PreloadTask {
  public:
 -    explicit PreloadTask(const HTMLToken& token)
-+    explicit PreloadTask(const HTMLToken& token, bool inPicture, Frame* frame, RenderStyle* renderStyle)
++    explicit PreloadTask(const HTMLToken& token, bool inPicture, bool picturePreloaded, Frame* frame, RenderStyle* renderStyle)
          : m_tagName(token.name().data(), token.name().size())
          , m_linkIsStyleSheet(false)
          , m_linkMediaAttributeIsScreen(true)
          , m_inputIsImage(false)
 +        , m_inPictureSubTree(inPicture)
-+        , m_picturePreloaded(false)
++        , m_picturePreloaded(picturePreloaded)
 +        , m_frame(frame)
 +        , m_renderStyle(renderStyle)
      {
@@ -706,8 +706,9 @@ index a75b52e..928e860 100644
 +
      void processAttributes(const HTMLToken::AttributeList& attributes)
      {
-         if (m_tagName != imgTag
-+            && (m_tagName != sourceTag || !m_inPictureSubTree)
+-        if (m_tagName != imgTag
++        if ((m_tagName != imgTag || m_inPictureSubTree)
++            && (m_tagName != sourceTag || !m_inPictureSubTree || m_picturePreloaded)
 +            && m_tagName != pictureTag 
              && m_tagName != inputTag
              && m_tagName != linkTag
@@ -753,7 +754,7 @@ index a75b52e..928e860 100644
 +                  m_tagName == pictureTag || 
 +                  (m_tagName == sourceTag && m_sourceMediaAttributeMatches && !m_picturePreloaded)){
              cachedResourceLoader->preload(CachedResource::ImageResource, request, String(), scanningBody);
-+            if(m_tagName == sourceTag)
++            if(m_tagName == sourceTag || m_tagName == pictureTag)
 +                m_picturePreloaded = true;
 +        }
          else if (m_tagName == linkTag && m_linkIsStyleSheet && m_linkMediaAttributeIsScreen) 
@@ -772,7 +773,16 @@ index a75b52e..928e860 100644
  };
  
  HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
-@@ -187,10 +224,18 @@ void HTMLPreloadScanner::processToken()
+@@ -155,6 +192,8 @@ HTMLPreloadScanner::HTMLPreloadScanner(Document* document)
+     , m_tokenizer(HTMLTokenizer::create(HTMLDocumentParser::usePreHTML5ParserQuirks(document)))
+     , m_bodySeen(false)
+     , m_inStyle(false)
++    , m_inPicture(false)
++    , m_picturePreloadedSource(false)
+ {
+ }
+ 
+@@ -187,10 +226,19 @@ void HTMLPreloadScanner::processToken()
          }
      }
  
@@ -780,6 +790,7 @@ index a75b52e..928e860 100644
 +        AtomicString tagName(m_token.name().data(), m_token.name().size());
 +        if(tagName == pictureTag){
 +            m_inPicture = false;
++            m_picturePreloadedSource = false;
 +        }
 +    }
 +
@@ -788,11 +799,11 @@ index a75b52e..928e860 100644
  
 -    PreloadTask task(m_token);
 +    RefPtr<RenderStyle> documentStyle = StyleResolver::styleForDocument(m_document, 0);
-+    PreloadTask task(m_token, m_inPicture, m_document->frame(), documentStyle.get());
++    PreloadTask task(m_token, m_inPicture, m_picturePreloadedSource, m_document->frame(), documentStyle.get());
      m_tokenizer->updateStateFor(task.tagName(), m_document->frame());
  
      if (task.tagName() == bodyTag)
-@@ -199,10 +244,16 @@ void HTMLPreloadScanner::processToken()
+@@ -199,10 +247,16 @@ void HTMLPreloadScanner::processToken()
      if (task.tagName() == styleTag)
          m_inStyle = true;
  
@@ -805,19 +816,20 @@ index a75b52e..928e860 100644
  
      task.preload(m_document, scanningBody(), m_predictedBaseElementURL.isEmpty() ? m_document->baseURL() : m_predictedBaseElementURL);
 +
-+    m_inPicture = !task.picturePreloaded();
++    m_picturePreloadedSource = task.picturePreloaded();
  }
  
  bool HTMLPreloadScanner::scanningBody() const
 diff --git html/parser/HTMLPreloadScanner.h html/parser/HTMLPreloadScanner.h
-index 38f5772..440b114 100644
+index 38f5772..5dc4d6c 100644
 --- html/parser/HTMLPreloadScanner.h
 +++ html/parser/HTMLPreloadScanner.h
-@@ -58,6 +58,7 @@ private:
+@@ -58,6 +58,8 @@ private:
      HTMLToken m_token;
      bool m_bodySeen;
      bool m_inStyle;
 +    bool m_inPicture;
++    bool m_picturePreloadedSource;
      KURL m_predictedBaseElementURL;
  };
  
@@ -835,12 +847,12 @@ index 0e104b6..df8f410 100644
      attribute HTMLLIElementConstructor HTMLLIElement;
 diff --git picture_patch.txt picture_patch.txt
 new file mode 100644
-index 0000000..cd788a4
+index 0000000..eaa3f35
 --- /dev/null
 +++ picture_patch.txt
 @@ -0,0 +1,750 @@
 +diff --git .gitignore .gitignore
-+index 5565643..84c7e47 100644
++index 5565643..c61f6e5 100644
 +--- .gitignore
 ++++ .gitignore
 +@@ -259,3 +259,7 @@ v8.log
@@ -850,7 +862,7 @@ index 0000000..cd788a4
 ++*.orig
 ++*.rej
 ++*.vim
-++
+++*.mod
 +diff --git CMakeLists.txt CMakeLists.txt
 +index f0fe4a9..77dd03e 100644
 +--- CMakeLists.txt
@@ -921,7 +933,7 @@ index 0000000..cd788a4
 + 	$(WebCore)/html/HTMLLIElement.idl \
 +diff --git README.md README.md
 +new file mode 100644
-+index 0000000..0405694
++index 0000000..33e49dc
 +--- /dev/null
 ++++ README.md
 +@@ -0,0 +1,43 @@
@@ -934,7 +946,7 @@ index 0000000..cd788a4
 ++It is based on Chromium's WebKit from 17/10/12.
 ++
 ++*Note*: This is a work in progress. It does not (yet) represent a full
-++implementation of the `<picture>` element [specification](http://responsiveimagescg.github.com/picture-element/). Please file any
+++implementation of the `<picture>` element [specification](http://picture.responsiveimages.org/). Please file any
 ++inconsistency with the specification as an issue.
 ++
 ++
@@ -947,11 +959,11 @@ index 0000000..cd788a4
 ++
 ++Binaries:
 ++--------------------------
-++* Ubuntu 64bit & OSX binaries can be found [here]( https://github.com/yoavweiss/RespImg-WebCore/downloads)
+++* Ubuntu 64bit & OSX binaries can be found [here]( https://github.com/ResponsiveImagesCG/RespImg-WebCore/downloads)
 ++
 ++Test page:
 ++---------------------
-++Once you got your new binary, you can see `<picture>` in action [here] (http://yoavweiss.github.com/RespImg-WebCore/)
+++Once you got your new binary, you can see `<picture>` in action [here] (http://demos.responsiveimages.org/)
 ++
 ++What should be working:
 ++--------------------
@@ -1514,7 +1526,7 @@ index 0000000..cd788a4
 + input constructorNeedsFormElement, constructorNeedsCreatedByParser
 + intent conditional=WEB_INTENTS_TAG
 +diff --git html/parser/HTMLPreloadScanner.cpp html/parser/HTMLPreloadScanner.cpp
-+index a75b52e..928e860 100644
++index a75b52e..fad61d4 100644
 +--- html/parser/HTMLPreloadScanner.cpp
 ++++ html/parser/HTMLPreloadScanner.cpp
 +@@ -38,6 +38,7 @@
@@ -1530,13 +1542,13 @@ index 0000000..cd788a4
 + class PreloadTask {
 + public:
 +-    explicit PreloadTask(const HTMLToken& token)
-++    explicit PreloadTask(const HTMLToken& token, bool inPicture, Frame* frame, RenderStyle* renderStyle)
+++    explicit PreloadTask(const HTMLToken& token, bool inPicture, bool picturePreloaded, Frame* frame, RenderStyle* renderStyle)
 +         : m_tagName(token.name().data(), token.name().size())
 +         , m_linkIsStyleSheet(false)
 +         , m_linkMediaAttributeIsScreen(true)
 +         , m_inputIsImage(false)
 ++        , m_inPictureSubTree(inPicture)
-++        , m_picturePreloaded(false)
+++        , m_picturePreloaded(picturePreloaded)
 ++        , m_frame(frame)
 ++        , m_renderStyle(renderStyle)
 +     {
@@ -1547,8 +1559,9 @@ index 0000000..cd788a4
 ++
 +     void processAttributes(const HTMLToken::AttributeList& attributes)
 +     {
-+         if (m_tagName != imgTag
-++            && (m_tagName != sourceTag || !m_inPictureSubTree)
++-        if (m_tagName != imgTag
+++        if ((m_tagName != imgTag || m_inPictureSubTree)
+++            && (m_tagName != sourceTag || !m_inPictureSubTree || m_picturePreloaded)
 ++            && m_tagName != pictureTag 
 +             && m_tagName != inputTag
 +             && m_tagName != linkTag
@@ -1587,6 +1600,5 @@ index 0000000..cd788a4
 +@@ -130,8 +156,14 @@ public:
 +         ResourceRequest request = document->completeURL(m_urlToLoad, baseURL);
 +         if (m_tagName == scriptTag)
-+             cachedResourceLoader->preload(CachedResource::Script, request, m_charset, scanningBody);
-+-        else if (m_tagName == i
++             cachedResourceLoader-
 \ No newline at end of file
